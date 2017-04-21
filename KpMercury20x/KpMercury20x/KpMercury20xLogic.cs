@@ -377,6 +377,7 @@ namespace Scada.Comm.Devices
                 FinishRequest();
             }
             
+            tag = 0;
             CalcSessStats(); // расчёт статистики
         }
         //-------------------------
