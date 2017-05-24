@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using Scada.Comm.Devices.Enums;
 using System.Runtime.InteropServices;
 
 namespace Scada.Comm.Devices
