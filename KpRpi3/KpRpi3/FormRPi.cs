@@ -23,7 +23,6 @@ namespace Scada.Comm.Devices.KpRpi3
         int comand;
         string sr = ";";
 
-
         // Конструктор, ограничивающий создание формы без параметров
         public FormRPi()
         {
@@ -38,7 +37,6 @@ namespace Scada.Comm.Devices.KpRpi3
                 throw new ArgumentNullException("kpProps");
             if (appDirs == null)
                 throw new ArgumentNullException("appDirs");
-
             FormRPi formRpi = new FormRPi();
             formRpi.kpNum = kpNum;
             formRpi.kpProps = kpProps;
@@ -53,7 +51,6 @@ namespace Scada.Comm.Devices.KpRpi3
             s_out = Parametrs.Parametr(kpProps.CmdLine);
             LineCmd.Text = kpProps.CmdLine;
             kpProps.Modified = false;
-
             int chanel = Convert.ToInt32(s_out[0], 10);
             int in_out = Convert.ToInt32(s_out[1], 10);
             int pullC  = Convert.ToInt32(s_out[2], 10);
@@ -68,6 +65,7 @@ namespace Scada.Comm.Devices.KpRpi3
             {
                 (Controls["checkGpio" + i.ToString()] as CheckBox).Checked = Parametrs.GetBit(chanel, i-4) > 0;
             }
+            
             for (int i = 4; i < 28; i++)
             {
                 (Controls["inout" + i.ToString()] as CheckBox).Checked = Parametrs.GetBit(in_out, i-4) > 0;
@@ -81,8 +79,8 @@ namespace Scada.Comm.Devices.KpRpi3
                     if (!(Controls["checkGpio" + i.ToString()] as CheckBox).Checked) (Controls["inout" + i.ToString()] as CheckBox).Enabled = false;
                     (Controls["inout" + i.ToString()] as CheckBox).Text = "IN";
                 }
-
             }
+            
             for (int i = 4; i < 28; i++)
             {
                 (Controls["pull" + i.ToString()] as CheckBox).Checked = Parametrs.GetBit(pullC, i-4) > 0;
@@ -147,7 +145,6 @@ namespace Scada.Comm.Devices.KpRpi3
 
         private void INOUT_checkedChanged(object sender, EventArgs e)
         {
-
             for (int i = 4; i < 28; i++)
             {
                 inout_gpio = Parametrs.SetBit(inout_gpio, i-4, (Controls["inout" + i.ToString()] as CheckBox).Checked);
@@ -178,14 +175,12 @@ namespace Scada.Comm.Devices.KpRpi3
                 }
             }
             LineCmd.Text = Convert.ToString(mask_gpio) + sr + Convert.ToString(inout_gpio) + sr + Convert.ToString(pull_gpio) + sr + Convert.ToString(level_gpio) + sr + Convert.ToString(comand) + sr;
-
         }
 
         private void level_CheckedChanged(object sender, EventArgs e)
         {
             for (int i = 4; i < 28; i++)
             {
-
                 level_gpio = Parametrs.SetBit(level_gpio, i-4, (Controls["level" + i.ToString()] as CheckBox).Checked);
                 if ((Controls["level" + i.ToString()] as CheckBox).Checked)
                 {
@@ -199,18 +194,15 @@ namespace Scada.Comm.Devices.KpRpi3
         LineCmd.Text = Convert.ToString(mask_gpio) + sr + Convert.ToString(inout_gpio) + sr + Convert.ToString(pull_gpio) + sr + Convert.ToString(level_gpio) + sr + Convert.ToString(comand) + sr;
         }
 
-
         private void Comand(object sender, EventArgs e)
         {
             comand = Parametrs.SetBit(comand, 0, ActivateOut.Checked);
             comand = Parametrs.SetBit(comand, 1, Retain.Checked);
             LineCmd.Text = Convert.ToString(mask_gpio) + sr + Convert.ToString(inout_gpio) + sr + Convert.ToString(pull_gpio) + sr + Convert.ToString(level_gpio) + sr + Convert.ToString(comand) + sr;
-
         }
 
         private void FormRPi_FormClosing(object sender, FormClosingEventArgs e)
         {
-
         }
 
         private void GpioFormat_SelectedIndexChanged(object sender, EventArgs e)
