@@ -50,6 +50,6 @@ Bit 0 of the number - 1 allows to record the level before the activation of the 
  When you change the settings of command prompt and restart ScadaComm there will be a full initialization, when the bit is set to 0, regardless of the set bit is 1. 
 Bit 2 - select the numbering format GPIO (BCM or WirngPi) in the file kpXXX.txt where XXX is the number of your KP in the server database.
 
-For convenience, the settings, run the CP Properties Poll tab KP corresponding line of the Communicator.
+For convenience, the settings, run the KP Properties Poll tab KP corresponding line of the Communicator.
 The communication Parameters of the communication line - communication Channel - Type = Not specified
 Copy the command-line parameters to ScadaCommSvcConfig.xml the corresponding line on the Raspberry Pi when changing.
