@@ -1,6 +1,5 @@
 using Scada.Comm.Channels;
 using Scada.Data.Models;
-using Scada.Comm.Devices.KpRpi3;
 using Scada.Data.Tables;
 using System;
 using System.Collections;
@@ -158,7 +157,7 @@ namespace Scada.Comm.Devices
 
             List<TagGroup> tagGroups = new List<TagGroup>();
             TagGroup tagGroup;
-            tagGroup = new TagGroup("Список используемых GPIO:");
+            tagGroup = new TagGroup(Localization.UseRussian ? "Список используемых GPIO:" : "List of used GPIO:"); 
 
             for (int i = 0; i < 24; i++)
             {
@@ -220,7 +219,7 @@ namespace Scada.Comm.Devices
                     {
                         lastCommSucc = false;
                         WiringPi.Core.DigitalWrite(gpio_num[num_com - 1], (Int32)can_in);
-                        WriteToLog("Запись значения " + (Int32)can_in + " сигнал " + num_com);
+                        WriteToLog((Localization.UseRussian ? "Запись значения " : "Write value ") + (Int32)can_in + (Localization.UseRussian ? " - сигнал " : " - signal ") + num_com);
                         // тут проверка изменения выхода должна быть (бесполезная)
                         int okey = WiringPi.Core.DigitalRead(gpio_num[num_com - 1]);
                         if (okey == (Int32)can_in)
@@ -251,6 +250,6 @@ namespace Scada.Comm.Devices
                 }
             }
         }
-        
+
     }
 }
