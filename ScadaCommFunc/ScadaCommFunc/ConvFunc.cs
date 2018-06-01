@@ -1,14 +1,14 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace ScadaCommFunc
 {
-    public class ConvFunc
+    public static class ConvFunc
     {
-        public static int DecToBCD(int dec) // Конвертирование десятичного числа в формат BCD (Используется в MBus, приборах Пульсар)
+        /// <summary>
+        /// Конвертирование десятичного числа в формат BCD (Используется в MBus, приборах Пульсар)
+        /// </summary>
+        /// <param name="dec"></param>
+        /// <returns></returns>
+        public static int DecToBCD(int dec)
         {
             int num = 0;
             int num1 = 0;
@@ -21,7 +21,13 @@ namespace ScadaCommFunc
             return num;
         }
 
-        public static long BcdToDec(byte[] bcdNumber) // Конвертирование числа в формате BCD в десятичный формат (Используется в MBus, приборах Пульсар)
+        /// <summary>
+        /// Конвертирование числа в формате BCD в десятичный формат (Используется в MBus, приборах Пульсар)
+        /// </summary>
+        /// <param name="bcdNumber"></param>
+        /// <returns></returns>
+
+        public static long BcdToDec(byte[] bcdNumber)
         {
             long result = 0;
             foreach (byte b in bcdNumber)
