@@ -1,0 +1,107 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<DevTemplate Name="Пульсар Регистратор 2-16М">
+  <SndGroups>
+    <SndGroup SndCnt="1" SndActive="true" SndName="Текущие параметры" SndCode="01" SndData="1"></SndGroup>
+    <SndGroup SndCnt="2" SndActive="false" SndName="Вес импульсов каналов" SndCode="07" SndData="21"></SndGroup>
+    <SndGroup SndCnt="3" SndActive="false" SndName="Системное время" SndCode="04" SndData=""></SndGroup>
+    <SndGroup SndCnt="4" SndActive="false" SndName="Авто Зима/Лето" SndCode="0A" SndData="01"></SndGroup>
+    <SndGroup SndCnt="5" SndActive="false" SndName="Версия прошивки" SndCode="0A" SndData="05"></SndGroup>
+    <SndGroup SndCnt="6" SndActive="true" SndName="Диагностика (маска ошибок)" SndCode="0A" SndData="06"></SndGroup>
+    <SndGroup SndCnt="7" SndActive="false" SndName="Мин. длит. паузы(мс)" SndCode="0A" SndData="04"></SndGroup>
+    <SndGroup SndCnt="8" SndActive="false" SndName="Мин. длит. имп.(мс)" SndCode="0A" SndData="03"></SndGroup>
+  </SndGroups>
+  <CmdGroups>
+    <CmdGroup CmdCnl="1" CmdActive="true" CmdName="Значение Канал1" CmdCode="03" CmdData="" CmdType="double"></CmdGroup>
+    <CmdGroup CmdCnl="2" CmdActive="true" CmdName="Значение Канал2" CmdCode="03" CmdData="" CmdType="double"></CmdGroup>
+    <CmdGroup CmdCnl="3" CmdActive="true" CmdName="Значение Канал3" CmdCode="03" CmdData="" CmdType="double"></CmdGroup>
+    <CmdGroup CmdCnl="4" CmdActive="true" CmdName="Значение Канал4" CmdCode="03" CmdData="" CmdType="double"></CmdGroup>
+    <CmdGroup CmdCnl="5" CmdActive="true" CmdName="Значение Канал5" CmdCode="03" CmdData="" CmdType="double"></CmdGroup>
+    <CmdGroup CmdCnl="6" CmdActive="true" CmdName="Значение Канал6" CmdCode="03" CmdData="" CmdType="double"></CmdGroup>
+    <CmdGroup CmdCnl="7" CmdActive="true" CmdName="Значение Канал7" CmdCode="03" CmdData="" CmdType="double"></CmdGroup>
+    <CmdGroup CmdCnl="8" CmdActive="true" CmdName="Значение Канал8" CmdCode="03" CmdData="" CmdType="double"></CmdGroup>
+    <CmdGroup CmdCnl="9" CmdActive="true" CmdName="Значение Канал9" CmdCode="03" CmdData="" CmdType="double"></CmdGroup>
+    <CmdGroup CmdCnl="10" CmdActive="true" CmdName="Значение Канал10" CmdCode="03" CmdData="" CmdType="double"></CmdGroup>
+    <CmdGroup CmdCnl="11" CmdActive="false" CmdName="Значение Канал11" CmdCode="03" CmdData="" CmdType="double"></CmdGroup>
+    <CmdGroup CmdCnl="12" CmdActive="false" CmdName="Значение Канал12" CmdCode="03" CmdData="" CmdType="double"></CmdGroup>
+    <CmdGroup CmdCnl="13" CmdActive="false" CmdName="Значение Канал13" CmdCode="03" CmdData="" CmdType="double"></CmdGroup>
+    <CmdGroup CmdCnl="14" CmdActive="false" CmdName="Значение Канал14" CmdCode="03" CmdData="" CmdType="double"></CmdGroup>
+    <CmdGroup CmdCnl="15" CmdActive="false" CmdName="Значение Канал15" CmdCode="03" CmdData="" CmdType="double"></CmdGroup>
+    <CmdGroup CmdCnl="16" CmdActive="false" CmdName="Значение Канал16" CmdCode="03" CmdData="" CmdType="double"></CmdGroup>
+    <CmdGroup CmdCnl="21" CmdActive="true" CmdName="Вес импульса, К1" CmdCode="08" CmdData="" CmdType="float"></CmdGroup>
+    <CmdGroup CmdCnl="22" CmdActive="true" CmdName="Вес импульса, К2" CmdCode="08" CmdData="" CmdType="float"></CmdGroup>
+    <CmdGroup CmdCnl="23" CmdActive="true" CmdName="Вес импульса, К3" CmdCode="08" CmdData="" CmdType="float"></CmdGroup>
+    <CmdGroup CmdCnl="24" CmdActive="true" CmdName="Вес импульса, К4" CmdCode="08" CmdData="" CmdType="float"></CmdGroup>
+    <CmdGroup CmdCnl="25" CmdActive="true" CmdName="Вес импульса, К5" CmdCode="08" CmdData="" CmdType="float"></CmdGroup>
+    <CmdGroup CmdCnl="26" CmdActive="true" CmdName="Вес импульса, К6" CmdCode="08" CmdData="" CmdType="float"></CmdGroup>
+    <CmdGroup CmdCnl="27" CmdActive="true" CmdName="Вес импульса, К7" CmdCode="08" CmdData="" CmdType="float"></CmdGroup>
+    <CmdGroup CmdCnl="28" CmdActive="true" CmdName="Вес импульса, К8" CmdCode="08" CmdData="" CmdType="float"></CmdGroup>
+    <CmdGroup CmdCnl="29" CmdActive="true" CmdName="Вес импульса, К9" CmdCode="08" CmdData="" CmdType="float"></CmdGroup>
+    <CmdGroup CmdCnl="30" CmdActive="true" CmdName="Вес импульса, К10" CmdCode="08" CmdData="" CmdType="float"></CmdGroup>
+    <CmdGroup CmdCnl="31" CmdActive="false" CmdName="Вес импульса, К11" CmdCode="08" CmdData="" CmdType="float"></CmdGroup>
+    <CmdGroup CmdCnl="32" CmdActive="false" CmdName="Вес импульса, К12" CmdCode="08" CmdData="" CmdType="float"></CmdGroup>
+    <CmdGroup CmdCnl="33" CmdActive="false" CmdName="Вес импульса, К13" CmdCode="08" CmdData="" CmdType="float"></CmdGroup>
+    <CmdGroup CmdCnl="34" CmdActive="false" CmdName="Вес импульса, К14" CmdCode="08" CmdData="" CmdType="float"></CmdGroup>
+    <CmdGroup CmdCnl="35" CmdActive="false" CmdName="Вес импульса, К15" CmdCode="08" CmdData="" CmdType="float"></CmdGroup>
+    <CmdGroup CmdCnl="36" CmdActive="false" CmdName="Вес импульса, К16" CmdCode="08" CmdData="" CmdType="float"></CmdGroup>
+    <CmdGroup CmdCnl="40" CmdActive="true" CmdName="Системное время" CmdCode="05" CmdData="" CmdType="DateTime"></CmdGroup>
+    <CmdGroup CmdCnl="41" CmdActive="true" CmdName="Авто Зима/Лето" CmdCode="0B" CmdData="01" CmdType="uint16"></CmdGroup>
+    <CmdGroup CmdCnl="44" CmdActive="true" CmdName="Мин. длит. паузы(мс)" CmdCode="0B" CmdData="04" CmdType="float"></CmdGroup>
+    <CmdGroup CmdCnl="45" CmdActive="true" CmdName="Мин. длит. имп.(мс)" CmdCode="0B" CmdData="03" CmdType="float"></CmdGroup>
+  </CmdGroups>
+  <Values>
+    <Value ValCnt="1" ValMenu="Текущие параметры">
+      <Vals SigCnl="1" SigActive="true" SigName="Канал1" SigType="double" Range="1" />
+      <Vals SigCnl="2" SigActive="true" SigName="Канал2" SigType="double" Range="1" />
+      <Vals SigCnl="3" SigActive="true" SigName="Канал3" SigType="double" Range="1" />
+      <Vals SigCnl="4" SigActive="true" SigName="Канал4" SigType="double" Range="1" />
+      <Vals SigCnl="5" SigActive="true" SigName="Канал5" SigType="double" Range="1" />
+      <Vals SigCnl="6" SigActive="true" SigName="Канал6" SigType="double" Range="1" />
+      <Vals SigCnl="7" SigActive="true" SigName="Канал7" SigType="double" Range="1" />
+      <Vals SigCnl="8" SigActive="true" SigName="Канал8" SigType="double" Range="1"></Vals>
+      <Vals SigCnl="9" SigActive="true" SigName="Канал9" SigType="double" Range="1" />
+      <Vals SigCnl="10" SigActive="true" SigName="Канал10" SigType="double" Range="1" />
+      <Vals SigCnl="11" SigActive="false" SigName="Канал11" SigType="double" Range="1" />
+      <Vals SigCnl="12" SigActive="false" SigName="Канал12" SigType="double" Range="1" />
+      <Vals SigCnl="13" SigActive="false" SigName="Канал13" SigType="double" Range="1" />
+      <Vals SigCnl="14" SigActive="false" SigName="Канал14" SigType="double" Range="1" />
+      <Vals SigCnl="15" SigActive="false" SigName="Канал15" SigType="double" Range="1" />
+      <Vals SigCnl="16" SigActive="false" SigName="Канал16" SigType="double" Range="1" />
+    </Value>
+    <Value ValCnt="2" ValMenu="Параметры настройки">
+      <Vals SigCnl="21" SigActive="true" SigName="Вес импульса, К1" SigType="float" Range="1" />
+      <Vals SigCnl="22" SigActive="true" SigName="Вес импульса, К2" SigType="float" Range="1" />
+      <Vals SigCnl="23" SigActive="true" SigName="Вес импульса, К3" SigType="float" Range="1" />
+      <Vals SigCnl="24" SigActive="true" SigName="Вес импульса, К4" SigType="float" Range="1" />
+      <Vals SigCnl="25" SigActive="true" SigName="Вес импульса, К5" SigType="float" Range="1" />
+      <Vals SigCnl="26" SigActive="true" SigName="Вес импульса, К6" SigType="float" Range="1" />
+      <Vals SigCnl="27" SigActive="true" SigName="Вес импульса, К7" SigType="float" Range="1" />
+      <Vals SigCnl="28" SigActive="true" SigName="Вес импульса, К8" SigType="float" Range="1"></Vals>
+      <Vals SigCnl="29" SigActive="true" SigName="Вес импульса, К9" SigType="float" Range="1" />
+      <Vals SigCnl="30" SigActive="true" SigName="Вес импульса, К10" SigType="float" Range="1" />
+      <Vals SigCnl="31" SigActive="false" SigName="Вес импульса, К11" SigType="float" Range="1" />
+      <Vals SigCnl="32" SigActive="false" SigName="Вес импульса, К12" SigType="float" Range="1" />
+      <Vals SigCnl="33" SigActive="false" SigName="Вес импульса, К13" SigType="float" Range="1" />
+      <Vals SigCnl="34" SigActive="false" SigName="Вес импульса, К14" SigType="float" Range="1" />
+      <Vals SigCnl="35" SigActive="false" SigName="Вес импульса, К15" SigType="float" Range="1" />
+      <Vals SigCnl="36" SigActive="false" SigName="Вес импульса, К16" SigType="float" Range="1" />
+    </Value>
+    <Value ValCnt="3" ValMenu="Системные данные">
+      <Vals SigCnl="40" SigActive="true" SigName="Системное время" SigType="DateTime" Range="1" />
+    </Value>
+    <Value ValCnt="4" ValMenu="Системные данные">
+      <Vals SigCnl="41" SigActive="true" SigName="Авто Зима/Лето" SigType="uint16" Range="1" />
+    </Value>
+    <Value ValCnt="5" ValMenu="Системные данные">
+      <Vals SigCnl="42" SigActive="true" SigName="Версия прошивки" SigType="uint32" Range="1" />
+    </Value>
+    <Value ValCnt="6" ValMenu="Системные данные">
+      <Vals SigCnl="43" SigActive="true" SigName="Диагностика (маска ошибок)" SigType="uint32" Range="1" />
+    </Value>
+    <Value ValCnt="7" ValMenu="Параметры настройки">
+      <Vals SigCnl="44" SigActive="true" SigName="Мин. длит. паузы(мс)" SigType="float" Range="1" />
+    </Value>
+    <Value ValCnt="8" ValMenu="Параметры настройки">
+      <Vals SigCnl="45" SigActive="true" SigName="Мин. длит. имп.(мс)" SigType="float" Range="1" />
+    </Value>
+  </Values>
+</DevTemplate>
