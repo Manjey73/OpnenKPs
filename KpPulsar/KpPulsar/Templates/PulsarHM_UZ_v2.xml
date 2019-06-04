@@ -1,0 +1,103 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<DevTemplate Name="Пульсар HeatMeter UZ v4">
+  <SndGroups>
+    <SndGroup SndCnt="1" SndActive="true" SndName="Текущие параметры" SndCode="01" SndData=""></SndGroup>
+    <SndGroup SndCnt="2" SndActive="false" SndName="Вес имп. Вх1" SndCode="0A" SndData="20"></SndGroup>
+    <SndGroup SndCnt="3" SndActive="false" SndName="Длительность имп. Вх1" SndCode="0A" SndData="21"></SndGroup>
+    <SndGroup SndCnt="4" SndActive="false" SndName="Вес имп. Вх2" SndCode="0A" SndData="23"></SndGroup>
+    <SndGroup SndCnt="5" SndActive="false" SndName="Длительность имп. Вх2" SndCode="0A" SndData="24"></SndGroup>
+    <SndGroup SndCnt="6" SndActive="false" SndName="Вес имп. Вх3" SndCode="0A" SndData="26"></SndGroup>
+    <SndGroup SndCnt="7" SndActive="false" SndName="Длительность имп. Вх3" SndCode="0A" SndData="27"></SndGroup>
+    <SndGroup SndCnt="8" SndActive="false" SndName="Вес имп. Вх4" SndCode="0A" SndData="29"></SndGroup>
+    <SndGroup SndCnt="9" SndActive="false" SndName="Длительность имп. Вх4" SndCode="0A" SndData="2A"></SndGroup>
+    <SndGroup SndCnt="10" SndActive="false" SndName="Вес имп. Вых" SndCode="0A" SndData="2C"></SndGroup>
+    <SndGroup SndCnt="11" SndActive="false" SndName="Длительность имп. Вых" SndCode="0A" SndData="2D"></SndGroup>
+    <SndGroup SndCnt="12" SndActive="false" SndName="Системное время" SndCode="04" SndData=""></SndGroup>
+    <SndGroup SndCnt="13" SndActive="false" SndName="Авто Зима/Лето" SndCode="0A" SndData="01"></SndGroup>
+    <SndGroup SndCnt="14" SndActive="false" SndName="Версия прошивки" SndCode="0A" SndData="05"></SndGroup>
+    <SndGroup SndCnt="15" SndActive="true" SndName="Ошибки (маска 2Byte)" SndCode="0A" SndData="06"></SndGroup>
+    <SndGroup SndCnt="16" SndActive="false" SndName="Время с ош. по маске" SndCode="0A" SndData="0E"></SndGroup>
+    <SndGroup SndCnt="17" SndActive="false" SndName="Время с ошибками" SndCode="0A" SndData="0D"></SndGroup>
+    <SndGroup SndCnt="18" SndActive="false" SndName="Т. хв" SndCode="0A" SndData="50"></SndGroup>
+  </SndGroups>
+  <CmdGroups>
+    <CmdGroup CmdCnl="43" CmdActive="false" CmdName="Запись времени" CmdCode="05" CmdData="" CmdType="DateTime" />
+    <CmdGroup CmdCnl="44" CmdActive="true" CmdName="Авто Зима/Лето" CmdCode="0B" CmdData="01" CmdType="uint16"></CmdGroup>
+  </CmdGroups>
+  <Values>
+    <Value ValCnt="1" ValMenu="Текущие параметры">
+      <Vals SigCnl="2" SigActive="false" SigName="Сопротивление обр.[Ом]" SigType="float" Range="1" />
+      <Vals SigCnl="3" SigActive="true" SigName="Температура под. [гр.С]" SigType="float" Range="1" />
+      <Vals SigCnl="4" SigActive="true" SigName="Температура обр. [гр.С]" SigType="float" Range="1" />
+      <Vals SigCnl="5" SigActive="true" SigName="Перепад температур [гр.С]" SigType="float" Range="1" />
+      <Vals SigCnl="6" SigActive="true" SigName="Мощность [ГКал/ч]" SigType="float" Range="1" />
+      <Vals SigCnl="7" SigActive="true" SigName="Энергия [ГКал]" SigType="float" Range="1" />
+      <Vals SigCnl="8" SigActive="true" SigName="Объем 1 [м.куб](V1)" SigType="float" Range="1" />
+      <Vals SigCnl="9" SigActive="true" SigName="Расход [м.куб/ч]" SigType="float" Range="1" />
+      <Vals SigCnl="10" SigActive="true" SigName="Имп. вход1 [м.куб]" SigType="float" Range="1" />
+      <Vals SigCnl="11" SigActive="false" SigName="Имп. вход2 [м.куб]" SigType="float" Range="1" />
+      <Vals SigCnl="12" SigActive="false" SigName="Имп. вход3 [м.куб]" SigType="float" Range="1" />
+      <Vals SigCnl="13" SigActive="false" SigName="Имп. вход4 [м.куб]" SigType="float" Range="1" />
+      <Vals SigCnl="20" SigActive="true" SigName="Время нормальной работы [ч]" SigType="uint32" Range="1" />
+      <Vals SigCnl="21" SigActive="true" SigName="Энергия охлаждения [ГКал](Q1)" SigType="float" Range="1" />
+      <Vals SigCnl="22" SigActive="true" SigName="Давление1 (P1)" SigType="float" Range="1" />
+      <Vals SigCnl="23" SigActive="true" SigName="Давление2 (P2)" SigType="float" Range="1" />
+      <Vals SigCnl="24" SigActive="true" SigName="Масса 1 (m1)" SigType="float" Range="1" />
+      <Vals SigCnl="25" SigActive="true" SigName="Масса холодной трубы (m2)" SigType="float" Range="1" />
+      <Vals SigCnl="26" SigActive="true" SigName="Масса отобранной (потерянной) воды (Δm)" SigType="float" Range="1" />
+      <Vals SigCnl="27" SigActive="true" SigName="Объем холодной воды (V2)" SigType="float" Range="1" />
+      <Vals SigCnl="28" SigActive="true" SigName="Энергия израсходованной воды (ΔQ)" SigType="float" Range="1" />
+    </Value>
+    <Value ValCnt="2" ValMenu="Параметры настройки">
+      <Vals SigCnl="33" SigActive="true" SigName="Вес имп. Вх1 (м3)" SigType="float" Range="1" />
+    </Value>
+    <Value ValCnt="3" ValMenu="Параметры настройки">
+      <Vals SigCnl="34" SigActive="true" SigName="Длительность имп. Вх1 (мс)" SigType="float" Range="1" />
+    </Value>
+    <Value ValCnt="4" ValMenu="Параметры настройки">
+      <Vals SigCnl="35" SigActive="true" SigName="Вес имп. Вх2 (м3)" SigType="float" Range="1" />
+    </Value>
+    <Value ValCnt="5" ValMenu="Параметры настройки">
+      <Vals SigCnl="36" SigActive="true" SigName="Длительность имп. Вх2 (мс)" SigType="float" Range="1" />
+    </Value>
+    <Value ValCnt="6" ValMenu="Параметры настройки">
+      <Vals SigCnl="37" SigActive="true" SigName="Вес имп. Вх3 (м3)" SigType="float" Range="1" />
+    </Value>
+    <Value ValCnt="7" ValMenu="Параметры настройки">
+      <Vals SigCnl="38" SigActive="true" SigName="Длительность имп. Вх3 (мс)" SigType="float" Range="1" />
+    </Value>
+    <Value ValCnt="8" ValMenu="Параметры настройки">
+      <Vals SigCnl="39" SigActive="true" SigName="Вес имп. Вх4 (м3)" SigType="float" Range="1" />
+    </Value>
+    <Value ValCnt="9" ValMenu="Параметры настройки">
+      <Vals SigCnl="40" SigActive="true" SigName="Длительность имп. Вх4 (мс)" SigType="float" Range="1" />
+    </Value>
+    <Value ValCnt="10" ValMenu="Параметры настройки">
+      <Vals SigCnl="41" SigActive="true" SigName="Вес имп. Вых [Гкал/имп]" SigType="float" Range="1" />
+    </Value>
+    <Value ValCnt="11" ValMenu="Параметры настройки">
+      <Vals SigCnl="42" SigActive="true" SigName="Длительность имп. Вых (мс)" SigType="float" Range="1" />
+    </Value>
+    <Value ValCnt="12" ValMenu="Системные данные">
+      <Vals SigCnl="43" SigActive="true" SigName="Системное время" SigType="DateTime" Range="1" />
+    </Value>
+    <Value ValCnt="13" ValMenu="Системные данные">
+      <Vals SigCnl="44" SigActive="true" SigName="Авто Зима/Лето" SigType="uint16" Range="1" />
+    </Value>
+    <Value ValCnt="14" ValMenu="Системные данные">
+      <Vals SigCnl="45" SigActive="true" SigName="Версия прошивки" SigType="uint32" Range="1" />
+    </Value>
+    <Value ValCnt="15" ValMenu="Системные данные">
+      <Vals SigCnl="46" SigActive="true" SigName="Ошибки (маска)" SigType="uint32" Range="1" />
+    </Value>
+    <Value ValCnt="16" ValMenu="Системные данные">
+      <Vals SigCnl="47" SigActive="true" SigName="Время с ош. по маске" SigType="uint32" Range="1" />
+    </Value>
+    <Value ValCnt="17" ValMenu="Системные данные">
+      <Vals SigCnl="48" SigActive="true" SigName="Время с ошибками" SigType="uint32" Range="1" />
+    </Value>
+    <Value ValCnt="18" ValMenu="Системные данные">
+      <Vals SigCnl="49" SigActive="true" SigName="Т. хв" SigType="float" Range="1" />
+    </Value>
+  </Values>
+</DevTemplate>
