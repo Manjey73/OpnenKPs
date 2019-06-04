@@ -1,0 +1,22 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<DevTemplate Name="Пульсар HeatMeter UZ v4">
+  <SndGroups>
+    <SndGroup SndCnt="1" SndActive="true" SndName="Текущие параметры" SndCode="01" SndData="1"></SndGroup>
+    <SndGroup SndCnt="2" SndActive="true" SndName="Саботажные срабатывания" SndCode="0A" SndData="1C"></SndGroup>
+    <SndGroup SndCnt="3" SndActive="false" SndName="Системное время" SndCode="04" SndData=""></SndGroup>
+  </SndGroups>
+  <CmdGroups>
+    <CmdGroup CmdCnl="34" CmdActive="false" CmdName="Запись времени" CmdCode="05" CmdData="" CmdType="DateTime" />
+  </CmdGroups>
+  <Values>
+    <Value ValCnt="1" ValMenu="Текущие параметры">
+      <Vals SigCnl="1" SigActive="true" SigName="Канал1 [м.куб]" SigType="float" Range="1" />
+    </Value>
+    <Value ValCnt="2" ValMenu="Системные данные">
+      <Vals SigCnl="33" SigActive="true" SigName="Саботажные срабатывания" SigType="uint32" Range="1" />
+    </Value>
+    <Value ValCnt="3" ValMenu="Системные данные">
+      <Vals SigCnl="34" SigActive="true" SigName="Системное время" SigType="DateTime" Range="1" />
+    </Value>
+  </Values>
+</DevTemplate>
