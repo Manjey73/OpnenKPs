@@ -117,12 +117,14 @@ namespace Scada.Comm.Devices
             public string MenuName { get; set; }        // MenuName - Имя меню, к которому принадлежит параметр
         }
 
-        private Dictionary<int, string> myTagId = new Dictionary<int, string>();        // Идентификаторы переменных для конвертирования в строку отображения в Коммуникаторе
-        private Dictionary<int, int> ActiveSnd = new Dictionary<int, int>();            // Ключ = Номер запроса SndCnt - Значение = Индекс Активного запроса SndCnt
-        private Dictionary<int, int> ActiveCmd = new Dictionary<int, int>();            // Ключ = Номер Активной команды CmdCnt - Значение = Индекс Активной команды CmdCnt
+        private Dictionary<int, string> myTagId = new Dictionary<int, string>();    // Идентификаторы переменных для конвертирования в строку отображения в Коммуникаторе
+        private Dictionary<int, int> ActiveSnd = new Dictionary<int, int>();        // Ключ = Номер запроса SndCnt - Значение = Индекс Активного запроса SndCnt
+        private Dictionary<int, int> ActiveCmd = new Dictionary<int, int>();        // Ключ = Номер Активной команды CmdCnt - Значение = Индекс Активной команды CmdCnt
 
-        private List<ActiveCnlList> ActiveCnl = new List<ActiveCnlList>();              // Создание списка Активных сигналов, где ActiveCnl.Cnl - номер сигнала, ActiveCnl.Name - Имя сигнала, ActiveCnl.Fotmat - Тип активной переменной
-                                                                                        // ActiveCnl.Index индекс сигнала в группе, ActiveCnl.IdxValue - Индекс группы, в которую входит сигнал
+        private List<ActiveCnlList> ActiveCnl = new List<ActiveCnlList>();          // Создание списка Активных сигналов, где ActiveCnl.Cnl - номер сигнала, ActiveCnl.Name - Имя сигнала, 
+                                                                                    // ActiveCnl.Fotmat - Тип активной переменной, ActiveCnl.IdxTag индекс сигнала в KPTags, ActiveCnl.IdxValue - Индекс группы,
+                                                                                    //  в которую входит сигнал, ActiveCnl.MenuName - Имя меню, которому принадлежит сигнал
+
         /// <summary>
         /// Преобразовать данные тега КП в строку
         /// </summary>
