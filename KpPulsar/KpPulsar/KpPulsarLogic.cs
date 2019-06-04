@@ -236,6 +236,10 @@ namespace Scada.Comm.Devices
                         {
                             var valCnt_ = devTemplate.Values.FindIndex(x => x.ValCnt == ActiveSnd.ElementAt(ac).Key);
 
+
+                            // TEST TEST TEST
+                            ExecWriteToLog(Convert.ToString(valCnt_));
+
                             for (int val = 0; val < devTemplate.Values[valCnt_].Vals.Count; val++)  // МЕНЯЕМ valCnt_ на уже проиндексированный Словарь 
                             {
                                 if (devTemplate.Values[valCnt_].Vals[val].SigActive)    // Проверяем переменную на активность
@@ -266,6 +270,7 @@ namespace Scada.Comm.Devices
                             }
                         }
 
+
                         // ------------ Создание тегов на основе созданного Списка Активных переменных  ------------ 
 
                         List<TagGroup> tagGroups = new List<TagGroup>();
@@ -295,11 +300,17 @@ namespace Scada.Comm.Devices
                         InitKPTags(tagGroups);                                                                      // Инициализация всех тегов
 
                         // Определяем диапазон каналов в группах  Текущие параметры и Вес импульса
-                        maxch = ActiveCnl.FindLast(d => d.IdxValue == ActiveCnl.Find(s => s.Cnl == startCnl).IdxValue).Cnl;     // Максимальный номер канала для Текущих параметров
-                        maxchv = ActiveCnl.FindLast(d => d.IdxValue == ActiveCnl.Find(s => s.Cnl == startCnlv).IdxValue).Cnl;   // Максимальный номер канала для Веса импульсов
+                        if (xValCnt01 != 0) // Если запрос с кодом 0x01 активен, переменная xValCnt01 содержит номер запроса
+                        {
+                            maxch = ActiveCnl.FindLast(d => d.IdxValue == ActiveCnl.Find(s => s.Cnl == startCnl).IdxValue).Cnl;   // Максимальный номер канала для Текущих параметров
+                            res_ch = BitFunc.CountBit32(mask_ch);               // Определяем количество бит = 1 в маске текущих параметров
+                        }
 
-                        res_ch = BitFunc.CountBit32(mask_ch);               // Определяем количество бит = 1 в маске текущих параметров
-                        res_chv = BitFunc.CountBit32(mask_chv);             // Определяем количество бит = 1 в маске Веса импульсов
+                        if (xValCnt07 != 0) // Если запрос с кодом 0x07 активен, переменная xValCnt07 содержит номер запроса
+                        {
+                            maxchv = ActiveCnl.FindLast(d => d.IdxValue == ActiveCnl.Find(s => s.Cnl == startCnlv).IdxValue).Cnl; // Максимальный номер канала для Веса импульсов
+                            res_chv = BitFunc.CountBit32(mask_chv);             // Определяем количество бит = 1 в маске Веса импульсов
+                        }
                     }
                 }
             }
@@ -319,7 +330,7 @@ namespace Scada.Comm.Devices
                         maskch = BitConverter.GetBytes(mask_ch);            // запись битовой маски Текущих параметров в массив байт
                         Array.Resize(ref buf_in, 8 * res_ch + 10);          // длина ответа 8 * n каналов + 10 байт
                     }
-                    else
+                    else if (Fcode == 0x07)
                     {
                         maskch = BitConverter.GetBytes(mask_chv);           // запись битовой маски Веса импульсов в массив байт
                         Array.Resize(ref buf_in, 4 * res_chv + 10);         // длина ответа 4 * n каналов + 10 байт
