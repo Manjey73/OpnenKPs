@@ -87,6 +87,7 @@ namespace Scada.Comm.Devices
 
         private byte[] byteIDres = new byte[2]; // Буфер для проверки ID запроса при ответе
 
+        private int col;                        // количество байт в переменных ответов в Текущих параметрах в зависимости от типа переменных
         private int mask_ch = 0;                // переменная для параметра MASK_CH
         private int mask_chv = 0;               // переменная для параметра MASK_CH Вес импульса (Регистратор импульсов)
         private int mask_ch_wr = 0;             // переменная для параметра MASK_CH записи данных каналов (Регистратор импульсов)
@@ -236,26 +237,10 @@ namespace Scada.Comm.Devices
                         {
                             var valCnt_ = devTemplate.Values.FindIndex(x => x.ValCnt == ActiveSnd.ElementAt(ac).Key);
 
-
-                            // TEST TEST TEST
-                            ExecWriteToLog(Convert.ToString(valCnt_));
-
                             for (int val = 0; val < devTemplate.Values[valCnt_].Vals.Count; val++)  // МЕНЯЕМ valCnt_ на уже проиндексированный Словарь 
                             {
                                 if (devTemplate.Values[valCnt_].Vals[val].SigActive)    // Проверяем переменную на активность
                                 {
-                                    // Проверяем номер запроса с параметром SndCode = F=0x01 и создаем маску запросов 
-                                    if (devTemplate.Values[valCnt_].ValCnt == xValCnt01)
-                                    {   // Заносим в маску номер сигнала - startCnl (1 по умолчанию) бит по расположению.
-                                        mask_ch = BitFunc.SetBit(mask_ch, devTemplate.Values[valCnt_].Vals[val].SigCnl-startCnl, devTemplate.Values[valCnt_].Vals[val].SigActive);
-                                    }   // SigCnl - startCnl (1 по умолчанию) определяет какой бит 32-х разрядного числа выставить в 1 (единицу)
-
-                                    if (devTemplate.Values[valCnt_].ValCnt == xValCnt07)
-                                    {   // Заносим в маску номер сигнала - startCnlv (41 по умолчанию) бит по расположению.
-                                        // Номера сигналов для запроса F=0x07, Вес импульса Регистратора импульсов должны начинаться с 41-ого если не задан в SndData
-                                        mask_chv = BitFunc.SetBit(mask_chv, devTemplate.Values[valCnt_].Vals[val].SigCnl - startCnlv, devTemplate.Values[valCnt_].Vals[val].SigActive);
-                                    }   // SigCnl - startCnlv (41 по умолчанию) определяет какой бит 32-х разрядного числа выставить в 1 (единицу)
-
                                     sigN = devTemplate.Values[valCnt_].Vals[val].SigCnl;        // читаем номер сигнала переменной
 
                                     ActiveCnl.Add(new ActiveCnlList()
@@ -266,6 +251,26 @@ namespace Scada.Comm.Devices
                                         IdxValue = valCnt_,                                     // Индекс группы ответа (ValCnt), в которой находится сигнал
                                         MenuName = devTemplate.Values[valCnt_].ValMenu
                                     });
+
+
+                                    // Проверяем номер запроса с параметром SndCode = F=0x01 и создаем маску запросов 
+                                    if (devTemplate.Values[valCnt_].ValCnt == xValCnt01)
+                                    {   // Заносим в маску номер сигнала - startCnl (1 по умолчанию) бит по расположению.
+                                        mask_ch = BitFunc.SetBit(mask_ch, devTemplate.Values[valCnt_].Vals[val].SigCnl-startCnl, devTemplate.Values[valCnt_].Vals[val].SigActive);
+                                        //maxch = ActiveCnl.FindLast(s => s.IdxValue == ActiveCnl.Find(d => d.Cnl == sigN).IdxValue).Cnl; //  Поиск Максимального номер канала для Текущих параметров
+
+                                    }   // SigCnl - startCnl (1 по умолчанию) определяет какой бит 32-х разрядного числа выставить в 1 (единицу)
+
+
+
+                                    if (devTemplate.Values[valCnt_].ValCnt == xValCnt07)
+                                    {   // Заносим в маску номер сигнала - startCnlv (41 по умолчанию) бит по расположению.
+                                        // Номера сигналов для запроса F=0x07, Вес импульса Регистратора импульсов должны начинаться с 41-ого если не задан в SndData
+                                        mask_chv = BitFunc.SetBit(mask_chv, devTemplate.Values[valCnt_].Vals[val].SigCnl - startCnlv, devTemplate.Values[valCnt_].Vals[val].SigActive);
+
+                                    }   // SigCnl - startCnlv (41 по умолчанию) определяет какой бит 32-х разрядного числа выставить в 1 (единицу)
+
+
                                 }
                             }
                         }
@@ -300,16 +305,29 @@ namespace Scada.Comm.Devices
                         InitKPTags(tagGroups);                                                                      // Инициализация всех тегов
 
                         // Определяем диапазон каналов в группах  Текущие параметры и Вес импульса
+
                         if (xValCnt01 != 0) // Если запрос с кодом 0x01 активен, переменная xValCnt01 содержит номер запроса
                         {
-                            maxch = ActiveCnl.FindLast(d => d.IdxValue == ActiveCnl.Find(s => s.Cnl == startCnl).IdxValue).Cnl;   // Максимальный номер канала для Текущих параметров
-                            res_ch = BitFunc.CountBit32(mask_ch);               // Определяем количество бит = 1 в маске текущих параметров
+                            int idx = devTemplate.SndGroups.FindIndex(f => f.SndCnt == xValCnt01);
+                            maxch = ActiveCnl.FindLast(d => d.IdxValue == idx).Cnl;     // Максимальный номер канала для Текущих параметров
+                            res_ch = BitFunc.CountBit32(mask_ch);                       // Определяем количество бит = 1 в маске текущих параметров
+                            string format = ActiveCnl.Find(d => d.IdxValue == idx).Format;
+
+                            if (format == "float" || format == "uint32")
+                            {
+                                col = 4;
+                            }
+                            if (format == "double")
+                            {
+                                col = 8;
+                            }
                         }
 
                         if (xValCnt07 != 0) // Если запрос с кодом 0x07 активен, переменная xValCnt07 содержит номер запроса
                         {
-                            maxchv = ActiveCnl.FindLast(d => d.IdxValue == ActiveCnl.Find(s => s.Cnl == startCnlv).IdxValue).Cnl; // Максимальный номер канала для Веса импульсов
-                            res_chv = BitFunc.CountBit32(mask_chv);             // Определяем количество бит = 1 в маске Веса импульсов
+                            int idx = devTemplate.SndGroups.FindIndex(f => f.SndCnt == xValCnt07);
+                            maxchv = ActiveCnl.FindLast(d => d.IdxValue == idx).Cnl;    // Максимальный номер канала для Веса импульсов
+                            res_chv = BitFunc.CountBit32(mask_chv);                     // Определяем количество бит = 1 в маске Веса импульсов
                         }
                     }
                 }
@@ -328,13 +346,14 @@ namespace Scada.Comm.Devices
                     if (Fcode == 0x01)
                     {
                         maskch = BitConverter.GetBytes(mask_ch);            // запись битовой маски Текущих параметров в массив байт
-                        Array.Resize(ref buf_in, 8 * res_ch + 10);          // длина ответа 8 * n каналов + 10 байт
+                        Array.Resize(ref buf_in, col * res_ch + 10);       // длина ответа 4 * n каналов (или 8 * n каналов) + 10 байт
                     }
                     else if (Fcode == 0x07)
                     {
                         maskch = BitConverter.GetBytes(mask_chv);           // запись битовой маски Веса импульсов в массив байт
                         Array.Resize(ref buf_in, 4 * res_chv + 10);         // длина ответа 4 * n каналов + 10 байт
                     }
+
                     Array.Copy(maskch, 0, buf_out, 6, maskch.Length);       // Копирование маски в буфер запроса
                 }
                 else if (Fcode == 0x04)                                     // Если код равен F=0x04 - Системное время
@@ -450,7 +469,7 @@ namespace Scada.Comm.Devices
                             ExecWriteToLog("ID ответа не совпадает с ID запроса");                     // При несовпадении ID
                         }
                         FinishRequest();
-                        invalidData(valCnt_, i);                                                       // выставить сигналы в невалидное состояние
+                        invalidData(valCnt_);                                                          // выставить сигналы в невалидное состояние
                     }
                     else
                     {
@@ -529,7 +548,7 @@ namespace Scada.Comm.Devices
                         ExecWriteToLog(CommPhrases.IncorrectResponseLength);    // Некорректная длина ответа 
                     }
                     FinishRequest();
-                    invalidData(valCnt_, i);                           // выставить сигналы в невалидное состояние
+                    invalidData(valCnt_);                           // выставить сигналы в невалидное состояние
                 }
 
                 if (tryNum != ActiveSnd.Count) lastCommSucc = false; // Если счетчик корректных ответов меньше количества запросов, то вся сессия false
@@ -537,7 +556,7 @@ namespace Scada.Comm.Devices
             CalcSessStats(); // расчёт статистики
         }
 
-        private void invalidData(int cnt, int i) // Расчитать количество невалидных сигналов и определить индекс первого сигнала, выставить сигналы в невалидное состояние
+        private void invalidData(int cnt) // Расчитать количество невалидных сигналов и определить индекс первого сигнала, выставить сигналы в невалидное состояние
         {
             // Найти индексы начального и конечного номера Тега в Списке, где первое и последнее вхождение номер индекса ответа IdxValue, где произошла ошибка
             var m = ActiveCnl.Find(n => n.IdxValue == cnt).IdxTag;      // Прочитали Номер Тега (IdxTag) первого найденного  в IdxValue списке (стартовый тег)
