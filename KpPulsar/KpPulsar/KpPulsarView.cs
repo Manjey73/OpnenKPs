@@ -34,7 +34,6 @@ namespace Scada.Comm.Devices
 {
     public sealed class KpPulsarView : KPView
     {
-
         private DevTemplate devTemplate = new DevTemplate();
         private DevTemplate.SndGroup sndGroup = new DevTemplate.SndGroup();
         private DevTemplate.CmdGroup cmdGroup = new DevTemplate.CmdGroup();
@@ -58,6 +57,7 @@ namespace Scada.Comm.Devices
 
         private List<ActiveCnlList> ActiveCnl = new List<ActiveCnlList>();              // Создание списка Активных сигналов, где ActiveCnl.Cnl - номер сигнала, ActiveCnl.Name - Имя сигнала, 
                                                                                         // ActiveCnl.Fotmat - Тип активной переменной, ActiveCnl.IdxCtrl - Индекс для ctrlCnl создания прототипов
+
         public override string KPDescr
         {
             get
@@ -114,8 +114,6 @@ namespace Scada.Comm.Devices
                     return null;
 
                 string filePath = Path.IsPathRooted(fileName) ? fileName : Path.Combine(AppDirs.ConfigDir, fileName);
-
-                devTemplate = FileFunc.LoadXml(typeof(DevTemplate), filePath) as DevTemplate;
 
                 try
                 {
@@ -187,7 +185,8 @@ namespace Scada.Comm.Devices
                             {
                                 // Так каналы управления будут последовательны вместе с входными каналами, последовательность
                                 // индексов ctrlCnl будет зависеть от расположения веток CmdGroup в шаблоне
-                                ActiveCnl.Find(s => s.Cnl == devTemplate.CmdGroups[cmd].CmdCnl).cmdActive = true;
+                                try { ActiveCnl.Find(s => s.Cnl == devTemplate.CmdGroups[cmd].CmdCnl).cmdActive = true; } // Проверка наличия активного входного канала, соответствующего каналу управления
+                                catch { }
                             }
                         }
                     }
