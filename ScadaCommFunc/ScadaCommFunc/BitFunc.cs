@@ -71,5 +71,6 @@ namespace ScadaCommFunc
             n = ((n >> 16) & 0x0000FFFF) + (n & 0x0000FFFF);
             return n;
         }
+
     }
 }
