@@ -48,8 +48,8 @@ namespace Scada.Comm.Devices
             string err = "Неизвестный тип ошибки";
             switch (error)
             {
-                case 0x01: err = "Отсутствует запрашиваемый код функции"; break; 
-                case 0x02: err = "Ошибка в битовой маске запроса"; break; 
+                case 0x01: err = "Отсутствует запрашиваемый код функции"; break;
+                case 0x02: err = "Ошибка в битовой маске запроса"; break;
                 case 0x03: err = "Ошибочная длина запроса"; break;
                 case 0x04: err = "Отсутствует параметр"; break;
                 case 0x05: err = "Запись заблокирована, требуется авторизация"; break;
@@ -133,7 +133,7 @@ namespace Scada.Comm.Devices
         {
             string strval = "";
             bool readstr = myTagId.TryGetValue(signal, out strval); // Чтение типа переменной, привязанной к сигналу
-            
+
             if (tagData.Stat > 0)
             {
                 if (strval == "DateTime")                           // Проверка сигнала на тип данных Время для отображения в текстовом виде в таблице Коммуникатора
@@ -233,7 +233,7 @@ namespace Scada.Comm.Devices
                     if (activeuse)
                     {
                         // ------------------- Сформировать Список параметров по меню ------------------
-                        for (int ac = 0; ac < ActiveSnd.Count; ac++)                                        
+                        for (int ac = 0; ac < ActiveSnd.Count; ac++)
                         {
                             var valCnt_ = devTemplate.Values.FindIndex(x => x.ValCnt == ActiveSnd.ElementAt(ac).Key);
 
@@ -252,16 +252,13 @@ namespace Scada.Comm.Devices
                                         MenuName = devTemplate.Values[valCnt_].ValMenu
                                     });
 
-
                                     // Проверяем номер запроса с параметром SndCode = F=0x01 и создаем маску запросов 
                                     if (devTemplate.Values[valCnt_].ValCnt == xValCnt01)
                                     {   // Заносим в маску номер сигнала - startCnl (1 по умолчанию) бит по расположению.
-                                        mask_ch = BitFunc.SetBit(mask_ch, devTemplate.Values[valCnt_].Vals[val].SigCnl-startCnl, devTemplate.Values[valCnt_].Vals[val].SigActive);
+                                        mask_ch = BitFunc.SetBit(mask_ch, devTemplate.Values[valCnt_].Vals[val].SigCnl - startCnl, devTemplate.Values[valCnt_].Vals[val].SigActive);
                                         //maxch = ActiveCnl.FindLast(s => s.IdxValue == ActiveCnl.Find(d => d.Cnl == sigN).IdxValue).Cnl; //  Поиск Максимального номер канала для Текущих параметров
 
                                     }   // SigCnl - startCnl (1 по умолчанию) определяет какой бит 32-х разрядного числа выставить в 1 (единицу)
-
-
 
                                     if (devTemplate.Values[valCnt_].ValCnt == xValCnt07)
                                     {   // Заносим в маску номер сигнала - startCnlv (41 по умолчанию) бит по расположению.
@@ -269,12 +266,9 @@ namespace Scada.Comm.Devices
                                         mask_chv = BitFunc.SetBit(mask_chv, devTemplate.Values[valCnt_].Vals[val].SigCnl - startCnlv, devTemplate.Values[valCnt_].Vals[val].SigActive);
 
                                     }   // SigCnl - startCnlv (41 по умолчанию) определяет какой бит 32-х разрядного числа выставить в 1 (единицу)
-
-
                                 }
                             }
                         }
-
 
                         // ------------ Создание тегов на основе созданного Списка Активных переменных  ------------ 
 
@@ -335,8 +329,7 @@ namespace Scada.Comm.Devices
         }
 
         // --------------------------------------------- Формирование буфера для команд чтения и команд записи
-
-        private void Buf_Out (int Num, byte Fcode, byte[] bData, bool read) // формирование буфера отправки в порт Num = Номер индекса запроса или команды  
+        private void Buf_Out(int Num, byte Fcode, byte[] bData, bool read) // формирование буфера отправки в порт Num = Номер индекса запроса или команды  
         {                                                                   // Fcode = параметр команды SndCode или CmdCode, read = true - чтение, выполняются запросы Snd или read = false, выполняются команды
             if (read)
             {                                                               // Тут собраны команды чтения
@@ -346,7 +339,7 @@ namespace Scada.Comm.Devices
                     if (Fcode == 0x01)
                     {
                         maskch = BitConverter.GetBytes(mask_ch);            // запись битовой маски Текущих параметров в массив байт
-                        Array.Resize(ref buf_in, col * res_ch + 10);       // длина ответа 4 * n каналов (или 8 * n каналов) + 10 байт
+                        Array.Resize(ref buf_in, col * res_ch + 10);        // длина ответа 4 * n каналов (или 8 * n каналов) + 10 байт
                     }
                     else if (Fcode == 0x07)
                     {
@@ -375,7 +368,7 @@ namespace Scada.Comm.Devices
                 if (Fcode == 0x03 || Fcode == 0x08)                                                                     // Если код равен F=0x03 – код функции записи текущих показаний
                 {                                                                                                       // Или F=0x08 - Вес импульса для Регистраторов импульса
                     Array.Resize(ref buf_out, 0x0E + bData.Length);                                                     // Меняем размер буфера для запроса Текущих параметров
-                    maskch =  Fcode == 0x03 ? BitConverter.GetBytes(mask_ch_wr): BitConverter.GetBytes(mask_chv_wr);    // запись битовой маски редактируемого канала в массив байт
+                    maskch = Fcode == 0x03 ? BitConverter.GetBytes(mask_ch_wr) : BitConverter.GetBytes(mask_chv_wr);    // запись битовой маски редактируемого канала в массив байт
                     Array.Copy(maskch, 0, buf_out, 6, maskch.Length);                                                   // Копирование маски в буфер запроса
                     Array.Copy(bData, 0, buf_out, 10, bData.Length);                                                    // Копируем значение cmdVal в буфер запроса
                     Array.Resize(ref buf_in, 14);                                                                       // длина ответа 14 байт
@@ -417,16 +410,12 @@ namespace Scada.Comm.Devices
         public override void Session()
         {
             base.Session();             // Опрос должен происходить согласно активности списка запросов по Словарю ActiveSnd
-            lastCommSucc = false;
-
             if (!fileyes)               // Если конфигурация не была загружена, выставляем все теги в невалидное состояние и выходим         
             {
                 InvalidateCurData();
                 return;
             }
 
-            int tryNum = 0; // Счетчик для корректных ответов
-            // Выполняем опрос если был загружен файл конфигурации
             for (int i = 0; i < ActiveSnd.Count; i++)
             {
                 int sndCnt_ = ActiveSnd.Values.ElementAt(i);                // Выполняем запросы поочередно по индексам из словаря Активных запросов
@@ -437,121 +426,129 @@ namespace Scada.Comm.Devices
                 // ------------------  Тут вызвать формирование буфера запроса --------------------------------------
                 Buf_Out(sndCnt_, sndcode_, null, true);                                             // отправить в функцию Номер и Байт запроса
 
-                Connection.Write(buf_out, 0, buf_out.Length, CommUtils.ProtocolLogFormats.Hex, out logText);    //послать запрос в порт
-                ExecWriteToLog(logText);                                                                        // вывести запрос в Журнал линии связи
-
-                readcnt = Connection.Read(buf_in, 0, buf_in.Length, ReqParams.Timeout, CommUtils.ProtocolLogFormats.Hex, out logText);  //считать значение из порта
-                ExecWriteToLog(logText);                                                                                                // вывести запрос в Журнал линии связи
-
-                // ------------------------------Тут проверка на корректность ответа - ID запроса и CRC -------------------------------------------------------------------
-
-                var valCnt_ = devTemplate.Values.FindIndex(x => x.ValCnt == ActiveSnd.ElementAt(i).Key); // Разбираем ответ поочередно по индексам из Списка Активных запросов
-
-                if (readcnt == buf_in.Length || readcnt == 11)
+                if (lastCommSucc)
                 {
-                    crc = CrcFunc.CalcCRC16(buf_in, readcnt);           // Рассчет CRC16 полученного ответа, при совпадении должно вернуть 0 при расчете CRC16(Modbus) и полного буфера вместе с CRC
-                    byte fCode = buf_in[4];
-                    Array.Copy(buf_in, readcnt - 4, byteIDres, 0, 2);
+                    lastCommSucc = false;
+                    int tryNum = 0; // Счетчик для корректных ответов
 
-                    if (!(crc == 0 & fCode != 0 & byteID.SequenceEqual(byteIDres)))                // Проверка CRC, параметра F и ID запроса
+                    // Выполняем опрос если был загружен файл конфигурации
+                    while (RequestNeeded(ref tryNum))
                     {
-                        if (crc != 0)
-                        {
-                            ExecWriteToLog(CommPhrases.ResponseCrcError);
-                        }
-                        else if (fCode == 0)
-                        {
-                            string err = Error_code(buf_in[6]);
-                            ExecWriteToLog(CommPhrases.IncorrectCmdData + " - " + err);                // При некорректном запросе F будет равен 0x00
-                        }
-                        else if (!byteID.SequenceEqual(byteIDres))
-                        {
-                            ExecWriteToLog("ID ответа не совпадает с ID запроса");                     // При несовпадении ID
-                        }
-                        FinishRequest();
-                        invalidData(valCnt_);                                                          // выставить сигналы в невалидное состояние
-                    }
-                    else
-                    {
-                        int index_bufin = 6;                                                            // Индекс первой переменной в ответе прибора
+                        Connection.Write(buf_out, 0, buf_out.Length, CommUtils.ProtocolLogFormats.Hex, out logText);    //послать запрос в порт
+                        ExecWriteToLog(logText);                                                                        // вывести запрос в Журнал линии связи
 
-                        for (int sig = 0; sig < devTemplate.Values[valCnt_].Vals.Count; sig++)          // Разбор по количеству переменных Vals в ответе
+                        readcnt = Connection.Read(buf_in, 0, buf_in.Length, ReqParams.Timeout, CommUtils.ProtocolLogFormats.Hex, out logText);  //считать значение из порта
+                        ExecWriteToLog(logText);                                                                                                // вывести запрос в Журнал линии связи
+
+                        // ------------------------------Тут проверка на корректность ответа - ID запроса и CRC -------------------------------------------------------------------
+                        var valCnt_ = devTemplate.Values.FindIndex(x => x.ValCnt == ActiveSnd.ElementAt(i).Key); // Разбираем ответ поочередно по индексам из Списка Активных запросов
+
+                        if (readcnt == buf_in.Length || readcnt == 11)
                         {
-                            if (devTemplate.Values[valCnt_].Vals[sig].SigActive)                        // Если переменная активна, читаем и разбираем ее
+                            crc = CrcFunc.CalcCRC16(buf_in, readcnt);           // Рассчет CRC16 полученного ответа, при совпадении должно вернуть 0 при расчете CRC16(Modbus) и полного буфера вместе с CRC
+                            byte fCode = buf_in[4];
+                            Array.Copy(buf_in, readcnt - 4, byteIDres, 0, 2);
+
+                            if (!(crc == 0 & fCode != 0 & byteID.SequenceEqual(byteIDres)))                // Проверка CRC, параметра F и ID запроса
                             {
-                                string sig_type = devTemplate.Values[valCnt_].Vals[sig].SigType;        // читаем тип переменной
-                                double range = devTemplate.Values[valCnt_].Vals[sig].Range;             // читаем множитель (мало ли, вдруг пригодится) :)
+                                if (crc != 0)
+                                {
+                                    ExecWriteToLog(CommPhrases.ResponseCrcError);
+                                }
+                                else if (fCode == 0)
+                                {
+                                    string err = Error_code(buf_in[6]);
+                                    ExecWriteToLog(CommPhrases.IncorrectCmdData + " - " + err);                // При некорректном запросе F будет равен 0x00
+                                }
+                                else if (!byteID.SequenceEqual(byteIDres))
+                                {
+                                    ExecWriteToLog("ID ответа не совпадает с ID запроса");                     // При несовпадении ID
+                                }
+                                FinishRequest();
+                                invalidData(valCnt_);                                                          // выставить сигналы в невалидное состояние
+                            }
+                            else
+                            {
+                                int index_bufin = 6;                                                            // Индекс первой переменной в ответе прибора
 
-                                int k = ActiveCnl.Find(s => s.Cnl == devTemplate.Values[valCnt_].Vals[sig].SigCnl).IdxTag; // Находим в списке Индекс переменной и Указываем индекс Тега
-
-                                if (sig_type == "float")
+                                for (int sig = 0; sig < devTemplate.Values[valCnt_].Vals.Count; sig++)          // Разбор по количеству переменных Vals в ответе
                                 {
-                                    SetCurData(k, BitConverter.ToSingle(buf_in, index_bufin) * range, 1);       // Конвертируем буфер байт в переменную float
-                                }
-                                else if (sig_type == "double")
-                                {
-                                    SetCurData(k, BitConverter.ToDouble(buf_in, index_bufin) * range, 1);       // Конвертируем буфер байт в переменную double
-                                }
-                                else if (sig_type == "uint16")
-                                {
-                                    SetCurData(k, BitConverter.ToUInt16(buf_in, index_bufin) * range, 1);       // Конвертируем буфер байт в переменную UInt16
-                                }
-                                else if (sig_type == "uint32")
-                                {
-                                    SetCurData(k, BitConverter.ToUInt32(buf_in, index_bufin) * range, 1);       // Конвертируем буфер байт в переменную UInt32
-                                }
-                                else if (sig_type == "DateTime")                                                // Определяем системное время и конвертируем в double для Scada
-                                {
-                                    if (!myTagId.ContainsKey(devTemplate.Values[valCnt_].Vals[sig].SigCnl))     // Указываем номер сигнала для преобразования в текстовую строку  
-                                    {                                                                           // в окне Данных КП Коммуникатора
-                                        myTagId.Add(devTemplate.Values[valCnt_].Vals[sig].SigCnl, "DateTime");
-                                    }
-
-                                    int year = Convert.ToInt32(buf_in[index_bufin]) + 2000;     // Читаем из ответа переменные года
-                                    int month = Convert.ToInt32(buf_in[index_bufin + 1]);       // месяца
-                                    int day = Convert.ToInt32(buf_in[index_bufin + 2]);         // дня
-                                    int hour = Convert.ToInt32(buf_in[index_bufin + 3]);        // часа
-                                    int minute = Convert.ToInt32(buf_in[index_bufin + 4]);      // минут
-                                    int second = Convert.ToInt32(buf_in[index_bufin + 5]);      // секунд
-                                    DateTime dateTime = new DateTime(year, month, day, hour, minute, second); //  формируем переменную времени в формате DateTime
-                                    SetCurData(k, dateTime.ToOADate(), 1);
-                                }
-
-                                if (devTemplate.Values[valCnt_].ValCnt == xValCnt01 || devTemplate.Values[valCnt_].ValCnt == xValCnt07)
-                                {
-                                    if (sig_type == "float")
+                                    if (devTemplate.Values[valCnt_].Vals[sig].SigActive)                        // Если переменная активна, читаем и разбираем ее
                                     {
-                                        index_bufin = index_bufin + 4;           // Увеличиваем индекс переменной для следующего текущего параметра для float
-                                    }
-                                    else if (sig_type == "double")
-                                    {
-                                        index_bufin = index_bufin + 8;           // Увеличиваем индекс переменной для следующего текущего параметра для double
+                                        string sig_type = devTemplate.Values[valCnt_].Vals[sig].SigType;        // читаем тип переменной
+                                        double range = devTemplate.Values[valCnt_].Vals[sig].Range;             // читаем множитель (мало ли, вдруг пригодится) :)
+
+                                        int k = ActiveCnl.Find(s => s.Cnl == devTemplate.Values[valCnt_].Vals[sig].SigCnl).IdxTag; // Находим в списке Индекс переменной и Указываем индекс Тега
+
+                                        if (sig_type == "float")
+                                        {
+                                            SetCurData(k, BitConverter.ToSingle(buf_in, index_bufin) * range, 1);       // Конвертируем буфер байт в переменную float
+                                        }
+                                        else if (sig_type == "double")
+                                        {
+                                            SetCurData(k, BitConverter.ToDouble(buf_in, index_bufin) * range, 1);       // Конвертируем буфер байт в переменную double
+                                        }
+                                        else if (sig_type == "uint16")
+                                        {
+                                            SetCurData(k, BitConverter.ToUInt16(buf_in, index_bufin) * range, 1);       // Конвертируем буфер байт в переменную UInt16
+                                        }
+                                        else if (sig_type == "uint32")
+                                        {
+                                            SetCurData(k, BitConverter.ToUInt32(buf_in, index_bufin) * range, 1);       // Конвертируем буфер байт в переменную UInt32
+                                        }
+                                        else if (sig_type == "DateTime")                                                // Определяем системное время и конвертируем в double для Scada
+                                        {
+                                            if (!myTagId.ContainsKey(devTemplate.Values[valCnt_].Vals[sig].SigCnl))     // Указываем номер сигнала для преобразования в текстовую строку  
+                                            {                                                                           // в окне Данных КП Коммуникатора
+                                                myTagId.Add(devTemplate.Values[valCnt_].Vals[sig].SigCnl, "DateTime");
+                                            }
+
+                                            int year = Convert.ToInt32(buf_in[index_bufin]) + 2000;     // Читаем из ответа переменные года
+                                            int month = Convert.ToInt32(buf_in[index_bufin + 1]);       // месяца
+                                            int day = Convert.ToInt32(buf_in[index_bufin + 2]);         // дня
+                                            int hour = Convert.ToInt32(buf_in[index_bufin + 3]);        // часа
+                                            int minute = Convert.ToInt32(buf_in[index_bufin + 4]);      // минут
+                                            int second = Convert.ToInt32(buf_in[index_bufin + 5]);      // секунд
+                                            DateTime dateTime = new DateTime(year, month, day, hour, minute, second); //  формируем переменную времени в формате DateTime
+                                            SetCurData(k, dateTime.ToOADate(), 1);
+                                        }
+
+                                        if (devTemplate.Values[valCnt_].ValCnt == xValCnt01 || devTemplate.Values[valCnt_].ValCnt == xValCnt07)
+                                        {
+                                            if (sig_type == "float")
+                                            {
+                                                index_bufin = index_bufin + 4;           // Увеличиваем индекс переменной для следующего текущего параметра для float
+                                            }
+                                            else if (sig_type == "double")
+                                            {
+                                                index_bufin = index_bufin + 8;           // Увеличиваем индекс переменной для следующего текущего параметра для double
+                                            }
+                                        }
                                     }
                                 }
+                                ExecWriteToLog(CommPhrases.ResponseOK);
+
+                                lastCommSucc = true;
+                                FinishRequest();
                             }
                         }
-                        ExecWriteToLog(CommPhrases.ResponseOK);
-
-                        lastCommSucc = true;                                   
-                        tryNum++;                                                // Увеличиваем счетчик корректных ответов
-                        FinishRequest();
+                        else
+                        {
+                            if (readcnt == 0)
+                            {
+                                ExecWriteToLog(CommPhrases.ResponseError);              // Нет ответа по Timeout - Ошибка связи!
+                            }
+                            else
+                            {
+                                ExecWriteToLog(CommPhrases.IncorrectResponseLength);    // Некорректная длина ответа 
+                            }
+                            FinishRequest();
+                            invalidData(valCnt_);                           // выставить сигналы в невалидное состояние
+                        }
+                        // завершение запроса
+                        tryNum++;
                     }
                 }
-                else
-                {
-                    if (readcnt == 0)
-                    {
-                        ExecWriteToLog(CommPhrases.ResponseError);              // Нет ответа по Timeout - Ошибка связи!
-                    }
-                    else
-                    {
-                        ExecWriteToLog(CommPhrases.IncorrectResponseLength);    // Некорректная длина ответа 
-                    }
-                    FinishRequest();
-                    invalidData(valCnt_);                           // выставить сигналы в невалидное состояние
-                }
-
-                if (tryNum != ActiveSnd.Count) lastCommSucc = false; // Если счетчик корректных ответов меньше количества запросов, то вся сессия false
             }
             CalcSessStats(); // расчёт статистики
         }
@@ -568,7 +565,6 @@ namespace Scada.Comm.Devices
 
         public override void SendCmd(Command cmd)
         {
-
             base.SendCmd(cmd);
             lastCommSucc = false;
 
@@ -593,13 +589,13 @@ namespace Scada.Comm.Devices
 
                 // Определив диапазон проверяем к какому из них относятся Текущие параметры и Веса импульса для составления маски
 
-                if ((cmdNum >= startCnl && cmdNum <= maxch) || (cmdNum >= startCnlv && cmdNum <= maxchv)) 
+                if ((cmdNum >= startCnl && cmdNum <= maxch) || (cmdNum >= startCnlv && cmdNum <= maxchv))
                 {
                     if ((cmdNum >= startCnl && cmdNum <= maxch) && !(cmdNum >= startCnlv && cmdNum <= maxchv))
                     {
                         mask_ch_wr = BitFunc.SetBit(mask_ch_wr, cmdNum - startCnl, true);       // Если каналы относятся к Текущим данным, то формируем маску для  записи маски текущих данных
                     }
-                    else 
+                    else
                     {
                         mask_chv_wr = BitFunc.SetBit(mask_chv_wr, cmdNum - startCnlv, true);    // Иначе для записи маски Весов импульсов
                     }
@@ -632,7 +628,6 @@ namespace Scada.Comm.Devices
                 }
 
                 if (cmdCode == 0x0B) Array.Resize(ref byteData, 8); // Увеличить размер буфера до 8 байт записываемого параметра F=0x0B PARAM_VAL_NEW
-
 
                 Buf_Out(cmdCnl, cmdCode, byteData, false);                                  // отправить в функцию Номер индекса команды управления и Байт запроса
 
@@ -697,7 +692,6 @@ namespace Scada.Comm.Devices
                         }
                         FinishRequest();
                     }
-
                 }
                 else
                 {
