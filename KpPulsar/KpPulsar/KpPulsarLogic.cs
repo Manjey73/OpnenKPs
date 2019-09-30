@@ -515,7 +515,7 @@ namespace Scada.Comm.Devices
 
                                         if (devTemplate.Values[valCnt_].ValCnt == xValCnt01 || devTemplate.Values[valCnt_].ValCnt == xValCnt07)
                                         {
-                                            if (sig_type == "float")
+                                            if (sig_type == "float" || sig_type == "uint32") // Найденная ошибка, не учитывалось увеличение индекса при наличии uint32 переменной
                                             {
                                                 index_bufin = index_bufin + 4;           // Увеличиваем индекс переменной для следующего текущего параметра для float
                                             }
