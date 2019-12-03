@@ -15,7 +15,7 @@
  * 
  * 
  * Product  : Rapid SCADA
- * Module   : KpSms
+ * Module   : KpExSms
  * Summary  : Device communication logic
  * 
  * Author   : Mikhail Shiryaev
@@ -112,15 +112,19 @@ namespace Scada.Comm.Devices
             {
                 kpTags.Add(new KPTag(1, "Связь"));
                 kpTags.Add(new KPTag(2, "Кол-во событий"));
+                // TEST -------------------
                 kpTags.Add(new KPTag(3, "Данные строки"));
                 kpTags.Add(new KPTag(4, "Номер тел."));
+                // TEST -------------------
             }
             else
             {
                 kpTags.Add(new KPTag(1, "Connection"));
                 kpTags.Add(new KPTag(2, "Event count"));
+                // TEST -------------------
                 kpTags.Add(new KPTag(3, "String data"));
                 kpTags.Add(new KPTag(4, "Phone num"));
+                // TEST -------------------
 
             }
             InitKPTags(kpTags);
@@ -634,14 +638,12 @@ namespace Scada.Comm.Devices
                             WriteEvent(msg.TimeStamp, msg.Phone, msg.Text, ref eventCnt);
                             msgObjArr[5] = true;
 
-                            // TEST
+                            // TEST ----------------------
                             string phone = msg.Phone;
                             phone = phone.Replace("+", "");
                             double dPhone;
 
                             SetCurData(2, ScadaUtils.EncodeAscii(msg.Text), 1);
-
-                            //var yyy = double.TryParse(phone, NumberStyles.Any, CultureInfo.InvariantCulture, out dPhone);
 
                             if (double.TryParse(phone, NumberStyles.Any, CultureInfo.InvariantCulture, out dPhone))
                             {
@@ -651,7 +653,7 @@ namespace Scada.Comm.Devices
                             {
                                 InvalidateCurData(3, 1);
                             }
-                            // TEST
+                            // TEST ---------------------------
 
                         }
                     }
@@ -681,7 +683,7 @@ namespace Scada.Comm.Devices
                 GetMessageObjList().Clear();
             }
 
-            IncEventCount(eventCnt); //, sdata);
+            IncEventCount(eventCnt);
             if (lastCommSucc)
                 WriteToLog((Localization.UseRussian ?
                     "Количество полученных сообщений: " :
@@ -737,7 +739,6 @@ namespace Scada.Comm.Devices
             // обработка сообщений из общих свойств линии связи
             List<object[]> msgObjList = GetMessageObjList();
             int eventCnt = 0; // количество созданных событий
-            //string sdata = "";
 
             foreach (object[] msgObjArr in msgObjList)
             {
@@ -765,7 +766,7 @@ namespace Scada.Comm.Devices
                 }
             }
 
-            IncEventCount(eventCnt); //, sdata);
+            IncEventCount(eventCnt);
             WriteToLog((Localization.UseRussian ?
                 "Количество полученных сообщений: " :
                 "Received message count: ") + eventCnt);
@@ -865,10 +866,12 @@ namespace Scada.Comm.Devices
                         (Localization.UseRussian ? "Нет" : "No");
                 else if (signal == 2)
                     return ((int)tagData.Val).ToString();
+                // TEST -------------------
                 else if (signal == 3)
                 {
                     return ScadaUtils.DecodeAscii(tagData.Val).ToString();
                 }
+                // TEST -------------------
             }
             return base.ConvertTagDataToStr(signal, tagData);
         }
@@ -971,7 +974,7 @@ namespace Scada.Comm.Devices
             // определение, является ли КП основным на линии связи
             // основным автоматически считается первый КП на линии связи
             object primaryObj;
-            if (CommonProps.TryGetValue("KpSmsPrimary", out primaryObj))
+            if (CommonProps.TryGetValue("KpExSmsPrimary", out primaryObj)) // TEST -----------------
             {
                 primary = false;
                 addressBook = null;
@@ -979,7 +982,7 @@ namespace Scada.Comm.Devices
             else
             {
                 primary = true;
-                CommonProps.Add("KpSmsPrimary", Caption);
+                CommonProps.Add("KpExSmsPrimary", Caption); // TEST -----------------
 
                 // загрузка адресной книги
                 if (!AbUtils.LoadAddressBook(AppDirs.ConfigDir, WriteToLog, out addressBook))
