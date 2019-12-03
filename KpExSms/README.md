@@ -15,26 +15,45 @@
 Для удаления всего кроме числа в Справочник - Формулы добавить
 
 // Формула -------------------------------------
+
 public static double ParseToDouble(double value)
+
 {
-  double result = Double.NaN;
+
+double result = Double.NaN;
+
 
   string s = ScadaUtils.DecodeAscii(value);
-  int idx = s.IndexOf(" ");
-  if (idx != -1)
-  {
-  s = s.Substring(0, idx);
-  }
 
-  if (!double.TryParse(s, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.GetCultureInfo("ru-RU"), out result))
-  {
-     if (!double.TryParse(s, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.GetCultureInfo("en-US"), out result))
-     {
-        return Double.NaN;
-     }
-  }
-  return result;
+int idx = s.IndexOf(" ");
+
+if (idx != -1)
+
+{
+
+s = s.Substring(0, idx);
+
 }
+
+
+if (!double.TryParse(s, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.GetCultureInfo("ru-RU"), out result))
+
+{
+if (!double.TryParse(s, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.GetCultureInfo("en-US"), out result))
+
+{
+
+return Double.NaN;
+
+}
+
+}
+
+return result;
+
+}
+
 // Конец формулы -----------------------------
+
 
 Можно в качестве разделителя использовать как точку так и запятую
