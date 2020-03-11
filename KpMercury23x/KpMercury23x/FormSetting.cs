@@ -79,6 +79,7 @@ namespace Scada.Comm.Devices.KpMercury23x
 
             kpProps.Modified = false;
 
+
             // настройка элементов управления
             openFileDialog.InitialDirectory = appDirs.ConfigDir;
 
