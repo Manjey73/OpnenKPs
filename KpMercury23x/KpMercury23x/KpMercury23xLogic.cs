@@ -60,23 +60,19 @@ namespace Scada.Comm.Devices
 
         private void InitRequests()
         {
-            //MyDevice iprop = (MyDevice)CommonProps[address];
             requests.testCnlReq = Protocol.TestCnlReq(Address);
             requests.openCnlReq = Protocol.OpenCnlReq(Address, uroven, Pass());
             requests.kuiReq = Protocol.KuiReq(Address);
 
-            // Подсчет количества запросов КП для одного прибора и формирование формата запроса
             // Формирование запроса фиксации данных в зависимости от параметра multicast
             if (devTemplate.multicast)
             {
-                //iprop.kpCnt++;
                 requests.fixDataReq = Protocol.FixDataReq(0xFE);
             }
             else
             {
                 requests.fixDataReq = Protocol.FixDataReq(Address);
             }
-            //CommonProps[address] = iprop;
         }
 
         private string Pass()
@@ -95,7 +91,6 @@ namespace Scada.Comm.Devices
 
         public class MyDevice                   // переменные для устройств на линии связи
         {
-            //public int kpCnt = 0;               // счетчик КП прибора с одним адресом для широковещательной команды
             public bool testcnl = false;        // фиксация команды тестирования канала
             public bool opencnl = false;        // фиксация команды авторизации и открытия канала
             public bool Kui = false;            // фиксация команды чтения коэффициентов трансформации
@@ -118,7 +113,6 @@ namespace Scada.Comm.Devices
                 string outprops = string.Concat("SN_", serial.ToString(), " Изготовлен ", made.ToString("dd.MM.yyyy"), " Пост.счетчика ", Aconst.ToString(), " имп/квт*ч");
                 return outprops;
             }
-
         }
 
         protected virtual string address
@@ -607,7 +601,6 @@ namespace Scada.Comm.Devices
                     WriteToLog(ToLogString(code));
                     CommSucc = false;
                 }
-                //CommonProps[address] = prop;
             }
 
             if (prop.testcnl) // Открытие канала с уровнем доступа согласно введенного пароля.
@@ -727,9 +720,6 @@ namespace Scada.Comm.Devices
                             // Тут сравнение времени фиксации и при необходимости отправка команды фиксации данных
                             if (datetime.Subtract(prop.dt).TotalMinutes > fixTime)
                             {
-                                //string time = string.Concat("Текущее время - ", Convert.ToString(datetime), " Разница - ", Convert.ToString(datetime.Subtract(prop.dt).TotalMinutes));
-                                //WriteToLog(time); // TEST TEST TEST
-                                
                                 Write(requests.fixDataReq);
                                 Thread.Sleep(ReqParams.Delay);
                             }
@@ -960,7 +950,6 @@ namespace Scada.Comm.Devices
                 taggroup.KPTags.Add(new KPTag(devTemplate.SndGroups[idgr].value[i].signal, Allname));
             }
         }
-
     }
 }
 
