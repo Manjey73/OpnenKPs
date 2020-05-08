@@ -61,7 +61,10 @@ namespace Scada.Comm.Devices
                 "Адрес счетчика  = Администратор -> КП -> Адрес\n\n" +
 
                 "Параметры DevTamplate:\npassword - пароль счетчика (asccii символы)\nreadparam - '14h' или '16h'\n" +
-                "mode - '1' или '2'\nlog - false или true (логирование в журнале)\n\n" +
+                "mode - '1' или '2'\nfixtime - время в минутах сравнения переданной команды фиксации данных\n" +
+                "можно вводить в дробном виде для секунд 0,2 или 0.3\n" +
+                "multicast = true - широковещательная команда фиксации данных\n" +
+                "info = true - прочитать данные счетчика, SN, дату производства, постоянную счтечика\n\n" +
                 "Параметры SndGroups - SndRequest:\n" +
 
                 "Name - общее имя группы параметров\n" +
@@ -178,7 +181,6 @@ namespace Scada.Comm.Devices
                                             });
                                             activeuse = true; // Есть активные группы запросов значений
                                         }
-
                                     }
                                 }
                             }
@@ -239,6 +241,5 @@ namespace Scada.Comm.Devices
                 return prototypes;
             }
         }
-
     }
 }
