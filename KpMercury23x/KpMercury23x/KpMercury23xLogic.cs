@@ -34,26 +34,115 @@ using System.Xml;
 using Scada.Data.Tables;
 using System.Windows.Forms;
 using ScadaCommFunc;
+using System.Threading;
+using System.Reflection;
+using Scada.Data.Configuration;
+
 
 
 namespace Scada.Comm.Devices
 {
 
-    public sealed class KpMercury23xLogic : KPLogic
+    public class KpMercury23xLogic : KPLogic
     {
         private DevTemplate devTemplate = new DevTemplate();
 
+        private int read_cnt = 0;
         private string fileName = "";
         private string filePath = "";
         private bool fileyes = false;   // При отсутствии файла не выполнять опрос
         private int idgr = 0;           // переменная для индекса группы
         private string Allname;         // Полное имя тега
+        private bool CommSucc = true;
+        private byte[] inBuf;
+
+        private Requests requests;
+
+        private void InitRequests()
+        {
+            //MyDevice iprop = (MyDevice)CommonProps[address];
+            requests.testCnlReq = Protocol.TestCnlReq(Address);
+            requests.openCnlReq = Protocol.OpenCnlReq(Address, uroven, Pass());
+            requests.kuiReq = Protocol.KuiReq(Address);
+
+            // Подсчет количества запросов КП для одного прибора и формирование формата запроса
+            // Формирование запроса фиксации данных в зависимости от параметра multicast
+            if (devTemplate.multicast)
+            {
+                //iprop.kpCnt++;
+                requests.fixDataReq = Protocol.FixDataReq(0xFE);
+            }
+            else
+            {
+                requests.fixDataReq = Protocol.FixDataReq(Address);
+            }
+            //CommonProps[address] = iprop;
+        }
+
+        private string Pass()
+        {
+            string kpNum_pass = string.Concat(Number.ToString(), "_pass");
+            string pass = String.IsNullOrEmpty(CustomParams.GetStringParam(kpNum_pass, false, "")) ? password : CustomParams.GetStringParam(kpNum_pass, false, "");
+            return pass;
+        }
 
         public static long Ticks() // возвращает время в миллисекундах
         {
             DateTime now = DateTime.Now;
             long time = now.Ticks / 10000;
             return time;
+        }
+
+        public class MyDevice                   // переменные для устройств на линии связи
+        {
+            //public int kpCnt = 0;               // счетчик КП прибора с одним адресом для широковещательной команды
+            public bool testcnl = false;        // фиксация команды тестирования канала
+            public bool opencnl = false;        // фиксация команды авторизации и открытия канала
+            public bool Kui = false;            // фиксация команды чтения коэффициентов трансформации
+            public int ku = 1;                  // Коэффициент трансформации напряжения 
+            public int ki = 1;                  // Коэффициент трансформации тока
+            public int[] parkui = new int[13];  // массив для данных коэффициентов
+            public long tik = 0;                // таймер времени открытого канала
+            public int firstKp = 0;             // КП, являющийся первым КП в опросе, последующие не записывают номер КП, значение остается = 0
+            public bool firstFix = false;       // Переменная для фиксации адреса первого КП
+            public DateTime dt;                 // Время команды фиксации для сравнения 
+
+            // Данные счетчика
+            public bool readInfo = false;       // блокировка чтения информации счетчика
+            public int serial = 0;              // Серийный номер счетчика
+            public int Aconst = 500;            // Постоянная счетчика, по умолчанию 500 имп/квт*ч
+            public DateTime made;               // Дата изготовления
+
+            public override string ToString()
+            {
+                string outprops = string.Concat("SN_", serial.ToString(), " Изготовлен ", made.ToString("dd.MM.yyyy"), " Пост.счетчика ", Aconst.ToString(), " имп/квт*ч");
+                return outprops;
+            }
+
+        }
+
+        protected virtual string address
+        {
+            get
+            {
+                return  devTemplate.Name + "_" + Convert.ToString(Address); //  + "DevAddr_"
+            }
+        }
+
+        private MyDevice GetMyDevice()
+        {
+            MyDevice devaddr = CommonProps.ContainsKey(address) ?
+                CommonProps[address] as MyDevice : null;
+
+            if (devaddr == null)
+            {
+                devaddr = new MyDevice();
+                if (!CommonProps.ContainsKey(address))
+                {
+                    CommonProps.Add(address, devaddr);
+                }
+            }
+            return devaddr;
         }
 
         public static string ToLogString(byte errcode)
@@ -71,6 +160,23 @@ namespace Scada.Comm.Devices
                 case 0x11: logs = "Нет устройства с таким адресом"; break;
             }
             return logs;
+        }
+
+        public static int ConstA(byte aconst)
+        {
+            aconst = (byte)(aconst & 0x0f);
+            // Постоянная счетчика в имп/квт*ч  - 2.3.16 - Чтение варианта исполнения 2-й байт 0-3 биты
+            int consta = 500;
+            switch (aconst)
+            {
+                case 0x00: consta = 5000; break;
+                case 0x01: consta = 25000; break;
+                case 0x02: consta = 1250; break;
+                case 0x03: consta = 500; break;
+                case 0x04: consta = 1000; break;
+                case 0x05: consta = 250; break;
+            }
+            return consta;
         }
 
         // Новый целочисленный массив с данными
@@ -101,19 +207,13 @@ namespace Scada.Comm.Devices
             return q;
         }
 
-        int[] bwri = new int[13]; // BWRI для запроса параметром 14h
-        int[] bwrc = new int[13]; // Разрешающая способность регистров хранения 
-        int[] b_length = new int[13];   // количество байт в ответе счетчика
-        int[] parb = new int[13];    // количество байт в параметре ответа (4 или 3)
-        int[] parc = new int[13];    // количество параметров в ответе (4, 3 или 1)
+        private int[] bwri = new int[13]; // BWRI для запроса параметром 14h
+        private int[] bwrc = new int[13]; // Разрешающая способность регистров хранения 
+        private int[] b_length = new int[13]; // количество байт в ответе счетчика
+        private int[] parb = new int[13];    // количество байт в параметре ответа (4 или 3)
+        private int[] parc = new int[13];    // количество параметров в ответе (4, 3 или 1)
 
         // Массив значений параметров BWRI счетчика + 'энергии от сброса параметр 14h
-        int[] bwri_14 = new int[] { 0x00, 0x04, 0x08, 0x30, 0x10, 0x20, 0x50, 0x40, 0xF0, 0xF1, 0xF2, 0xF3, 0xF4 }; // BWRI для запроса параметром 14h
-        int[] bwrc_14 = new int[] { 100, 100, 100, 1000, 100, 1000, 100, 100, 1000, 1000, 1000, 1000, 1000 }; // Разрешающая способность регистров хранения 
-        int[] b_length_14 = new int[] { 19, 19, 19, 15, 12, 12, 12, 6, 19, 19, 19, 19, 19 };   // количество байт в ответе счетчика
-        int[] parb_14 = new int[] { 4, 4, 4, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4 };    // количество байт в параметре ответа (4 или 3)
-        int[] parc_14 = new int[] { 4, 4, 4, 4, 3, 3, 3, 1, 4, 4, 4, 4, 4 };    // количество параметров в ответе (4, 3 или 1)
-
         // Команды BWRI для запроса 14h:
         // 0x00 - Мощность P по сумме фаз, фазе 1, фазе 2, фазе 3   (Вт)
         // 0x04 - Мощность Q по сумме фаз, фазе 1, фазе 2, фазе 3   (вар)
@@ -125,14 +225,14 @@ namespace Scada.Comm.Devices
         // 0x50 - Угол м-ду ф. 1 и 2, 1 и 3, 2 и 3                  (градусы)
 
         // F0,-,F4 - Зафиксированная энергия от сброса
+        private int[] bwri_14 = new int[] { 0x00, 0x04, 0x08, 0x30, 0x10, 0x20, 0x50, 0x40, 0xF0, 0xF1, 0xF2, 0xF3, 0xF4 }; // BWRI для запроса параметром 14h
+        private int[] bwrc_14 = new int[] { 100, 100, 100, 1000, 100, 1000, 100, 100, 1000, 1000, 1000, 1000, 1000 }; // Разрешающая способность регистров хранения 
+        private int[] b_length_14 = new int[] { 19, 19, 19, 15, 12, 12, 12, 6, 19, 19, 19, 19, 19 };   // количество байт в ответе счетчика
+        private int[] parb_14 = new int[] { 4, 4, 4, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4 };    // количество байт в параметре ответа (4 или 3)
+        private int[] parc_14 = new int[] { 4, 4, 4, 4, 3, 3, 3, 1, 4, 4, 4, 4, 4 };    // количество параметров в ответе (4, 3 или 1)
+
 
         // Массив значений параметров BWRI счетчика + 'энергии от сброса для чтения параметром 16h
-        int[] bwri_16 = { 0x00, 0x04, 0x08, 0x30, 0x11, 0x21, 0x51, 0x40, 0xF0, 0xF1, 0xF2, 0xF3, 0xF4 }; // BWRI для запроса параметром 16h
-        int[] bwrc_16 = { 100, 100, 100, 1000, 100, 1000, 100, 100, 1000, 1000, 1000, 1000, 1000 }; // Разрешающая способность регистров хранения 
-        int[] b_length_16 = { 15, 15, 15, 15, 12, 12, 12, 6, 19, 19, 19, 19, 19 };   // количество байт в ответе счетчика
-        int[] parb_16 = { 3, 3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4 };    // количество байт в параметре ответа (4 или 3)
-        int[] parc_16 = { 4, 4, 4, 4, 3, 3, 3, 1, 4, 4, 4, 4, 4 };    // количество параметров в ответе (4, 3 или 1)
-
         // Команды BWRI для запроса 16h:
         // 0x00 - Мощность P по сумме фаз, фазе 1, фазе 2, фазе 3   (Вт)
         // 0x04 - Мощность Q по сумме фаз, фазе 1, фазе 2, фазе 3   (вар)
@@ -143,32 +243,33 @@ namespace Scada.Comm.Devices
         // 0x40 - Частота сети
         // 0x51 - Угол м-ду ф. 1 и 2, 1 и 3, 2 и 3                  (градусы)
 
+        private int[] bwri_16 = { 0x00, 0x04, 0x08, 0x30, 0x11, 0x21, 0x51, 0x40, 0xF0, 0xF1, 0xF2, 0xF3, 0xF4 }; // BWRI для запроса параметром 16h
+        private int[] bwrc_16 = { 100, 100, 100, 1000, 100, 1000, 100, 100, 1000, 1000, 1000, 1000, 1000 }; // Разрешающая способность регистров хранения 
+        private int[] b_length_16 = { 15, 15, 15, 15, 12, 12, 12, 6, 19, 19, 19, 19, 19 };   // количество байт в ответе счетчика
+        private int[] parb_16 = { 3, 3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4 };    // количество байт в параметре ответа (4 или 3)
+        private int[] parc_16 = { 4, 4, 4, 4, 3, 3, 3, 1, 4, 4, 4, 4, 4 };    // количество параметров в ответе (4, 3 или 1)
+
         // Массив значений энергии по фазам прямого направления и чтения энергии от сброса функцией 0x05 при чтении счетчика параметром 16h кода функции 0x08
-        int[] massenergy = new int[] { 0, 1, 2, 3, 4 };
+        private int[] massenergy = new int[] { 0, 1, 2, 3, 4 };
 
-        bool testcnl = false;
-        bool opencnl = false;
-        bool Kui = false;
-        bool newmass = false;
-        bool newenergy = false;
-        long t1 = 0;
-        int ki = 1; // Коэффициент трансформации тока
-        int ku = 1; // Коэффициент трансформации напряжения
-        int tag = 1;
-        int[] nbwri = new int[1];
-        int[] nbwrc = new int[1];
-        int[] nb_length = new int[1];
-        int[] nparb = new int[1];
-        int[] nparc = new int[1];
-        int[] nenergy = new int[1];
-        byte code_err = 0x0;
-        byte code = 0x0;
-        int ennapr = 1;
-        int mask_g1 = 0; // Входная переменная для выбора тегов
-        bool slog = true;
-        int[] parkui = new int[] { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 };
+        private bool newmass = false;
+        private bool newenergy = false;
 
-        string readparam, password, uroven; //входная строка для обработки, объявление переменной для пароля и уровня доступа
+        private int tag = 1;
+        private int[] nbwri = new int[1];
+        private int[] nbwrc = new int[1];
+        private int[] nb_length = new int[1];
+        private int[] nparb = new int[1];
+        private int[] nparc = new int[1];
+        private int[] nenergy = new int[1];
+        private byte code_err = 0x0;
+        private byte code = 0x0;
+        private int Napr = 1;       // Направление Активной или Реактивной мощности 1 = прямое (бит направления = 0), при обратном значение = -1
+        private double fixTime;     // по умолчанию разница времени фиксации 1 минута
+
+        private int mask_g1 = 0; // Входная переменная для выбора тегов
+
+        private string readparam, password, uroven; //входная строка для параметра команды 0x08, объявление переменной для пароля и уровня доступа
 
         public override void OnAddedToCommLine()
         {
@@ -200,16 +301,19 @@ namespace Scada.Comm.Devices
                 }
             }
 
-            int[] parkui_16 = new int[] { ki, ki, ki, 1, ku, ki, 1, 1, ki, ki, ki, ki, ki };
-
-            int time_out = ReqParams.Timeout;
-
             if (devTemplate != null)
             {
                 password = string.IsNullOrEmpty(devTemplate.password) ? "111111" : devTemplate.password;
                 uroven = string.IsNullOrEmpty(devTemplate.mode.ToString()) ? "1" : devTemplate.mode.ToString(); // Преобразование int '1' или '2' к строке для совместимости с кодом драйвера, по умолчанию '1' если строка пуста
                 readparam = string.IsNullOrEmpty(devTemplate.readparam) ? "14h" : devTemplate.readparam;
-                slog = devTemplate.log;
+
+                double result = 1;
+                // чтение параметра времени сравнения фиксации в минутах
+                if (!double.TryParse(devTemplate.fixtime, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.GetCultureInfo("ru-RU"), out result))
+                {
+                    if (!double.TryParse(devTemplate.fixtime, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.GetCultureInfo("en-US"), out result)) ;
+                }
+                fixTime = result;
 
                 if (devTemplate.SndGroups.Count != 0) // Определить активные запросы объектов и записать в список индексы запросов для создания тегов
                 {
@@ -225,7 +329,6 @@ namespace Scada.Comm.Devices
 
             if (readparam == "14h")
             {
-                Array.Copy(parkui_16, parkui, 13);
                 Array.Copy(bwri_14, bwri, 13);
                 Array.Copy(bwrc_14, bwrc, 13);
                 Array.Copy(b_length_14, b_length, 13);
@@ -400,13 +503,49 @@ namespace Scada.Comm.Devices
         //---------------------------------------------------------------
         public KpMercury23xLogic(int number) : base(number)
         {
+            inBuf = new byte[100];
+            requests = new Requests();
+            CanSendCmd = true;
+            ConnRequired = true;
         }
         //---------------------------------------------------------------
+
+        /// <summary>
+        /// Выполнить действия при запуске линии связи
+        /// </summary>
+        public override void OnCommLineStart()
+        {
+            GetMyDevice();
+            InitRequests();
+        }
+
+        /// <summary>
+        /// Отправить запрос и сделать запись в журнал
+        /// </summary>
+        private void Write(byte[] request)
+        {
+            string logText;
+            WriteRequest(request, out logText);
+            WriteToLog(logText);
+        }
+
+        private void WriteRequest(byte[] request, out string logText)
+        {
+            logText = null;
+            Connection.Write(request, 0, request.Length, CommUtils.ProtocolLogFormats.Hex, out logText);
+        }
+
+        /// <summary>
+        /// Считать ответ из последовательного порта
+        /// </summary>
+        private void ReadAnswer(byte[] buffer, int count, out string logText)
+        {
+            read_cnt = Connection.Read(buffer, 0, count, ReqParams.Timeout, CommUtils.ProtocolLogFormats.Hex, out logText); //считать значение из порта
+        }
 
         //-------------------------
         public override void Session()
         {
-
             base.Session();
 
             if (!fileyes)        // Если конфигурация не была загружена, выставляем все теги в невалидное состояние и выходим         
@@ -414,6 +553,24 @@ namespace Scada.Comm.Devices
                 InvalidateCurData();
                 return;
             }
+
+            MyDevice prop = (MyDevice)CommonProps[address];
+
+            // код работает один раз
+            if (devTemplate.multicast && !prop.firstFix)
+            {
+                // Если параметр firstFix = true, то первый КП на линии посылает команду фиксации данных по широковещательному
+                // адресу 0xFE в линию, иначе каждый КП посылает команду своему прибору при параметре multicast = false
+                prop.firstKp = Number; // в качестве стартового используем номер КП, остальные будут = 0
+                for (int x = 0; x < CommonProps.Count; x++)
+                {
+                    var Val = (MyDevice)CommonProps.ElementAt(x).Value;
+                    Val.firstFix = true;
+                }
+                CommonProps[address] = prop;
+            }
+
+            CommSucc = true;
 
             uint par14h = Convert.ToUInt32(mask_g1 & 0x1FFF); // отсечь количество параметров для команды 08h и параметра 14h
 
@@ -435,347 +592,250 @@ namespace Scada.Comm.Devices
                 newenergy = true;
             }
 
-
-            byte[] buf_out = new byte[1];
-            buf_out[0] = Convert.ToByte(Address);
-            int i = buf_out.Length; //получить размер массива с адресом
-            byte[] buf_in; //резервирование массива получения
-            ushort res;  //резервирование ответа контрольной суммы
-
-            if (!testcnl)
+            if (!prop.testcnl)
             {
-                lastCommSucc = false;
-                string logText;
-                Array.Resize(ref buf_out, i + 3);           //изменить размер массива
-                buf_out[i] = 0x00;                          //команда запроса на тестирование канала
-                res = CrcFunc.CalcCRC16(buf_out, i + 1);    //получить контрольную сумму
-                buf_out[i + 1] = (byte)(res % 256);         //Добавить контрольную сумму к буферу посылки
-                buf_out[i + 2] = (byte)(res / 256);
-                Connection.Write(buf_out, 0, buf_out.Length, CommUtils.ProtocolLogFormats.Hex, out logText); //послать запрос в порт
-                if (slog) WriteToLog(logText);
-                System.Threading.Thread.Sleep(ReqParams.Delay);
+                Request(requests.testCnlReq, 4);
 
-                buf_in = new byte[4];
-                Connection.Read(buf_in, 0, buf_in.Length, ReqParams.Timeout, CommUtils.ProtocolLogFormats.Hex, out logText); //считать значение из порта
-                if (slog) WriteToLog(logText);
-                if (CrcFunc.CalcCRC16(buf_in, buf_in.Length) == 0)
+                if (lastCommSucc)
                 {
-                    testcnl = true;
-                    code = buf_in[1];
-                    lastCommSucc = true;
-                    if (slog) WriteToLog("OK!");
+                    prop.testcnl = true;
+                    code = inBuf[1];
                 }
                 else
                 {
                     code = 0x11;
                     WriteToLog(ToLogString(code));
-                    if (slog) WriteToLog("Ошибка!");
+                    CommSucc = false;
                 }
-                FinishRequest();
+                //CommonProps[address] = prop;
             }
 
-            if (testcnl) // Открытие канала с уровнем доступа согласно введенного пароля.
+            if (prop.testcnl) // Открытие канала с уровнем доступа согласно введенного пароля.
             {
                 long t2 = Ticks();
-                if ((t2 > (t1 + 240000)) || !opencnl)
+                if ((t2 > (prop.tik + 240000)) || !prop.opencnl)
                 {
-                    t1 = t2;
                     // Запрос на открытие канала
-                    lastCommSucc = false;
-                    string logText;
-                    byte[] temp_pass = new byte[4];
+                    Request(requests.openCnlReq, 4);
 
-                    string kpNum_pass = string.Concat(Number.ToString(), "_pass");
-                    string pass = String.IsNullOrEmpty(CustomParams.GetStringParam(kpNum_pass, false, "")) ? password : CustomParams.GetStringParam(kpNum_pass, false, "");
-
-                    byte[] buf_pass = Encoding.ASCII.GetBytes(pass);
-
-                    for (int f = 0; f < 6; f++)
+                    if (lastCommSucc)
                     {
-                        Array.Copy(buf_pass, f, temp_pass, 0, 1);
-                        int temp_int = BitConverter.ToInt32(temp_pass, 0) - 48;
-                        temp_pass = BitConverter.GetBytes(temp_int);
-                        Array.Copy(temp_pass, 0, buf_pass, f, 1);
-                    }
-
-                    Array.Resize(ref buf_out, 11); //изменить размер массива
-                    buf_out[1] = 0x01; //команда запроса на открытие канала
-                    buf_out[2] = Convert.ToByte(Convert.ToInt16(uroven)); // Ввод уровня доступа пока без проверки, по умолчанию 1.... 0x01; //Уровень доступа 1
-                    Array.Copy(buf_pass, 0, buf_out, 3, 6);
-                    res = CrcFunc.CalcCRC16(buf_out, buf_out.Length - 2); //получить контрольную сумму
-                    buf_out[buf_out.Length - 2] = (byte)(res % 256); //Добавить контрольную сумму к буферу посылки
-                    buf_out[buf_out.Length - 1] = (byte)(res / 256);
-                    Connection.Write(buf_out, 0, buf_out.Length, CommUtils.ProtocolLogFormats.Hex, out logText); //послать запрос в порт
-                    if (slog) WriteToLog(logText);
-                    System.Threading.Thread.Sleep(ReqParams.Delay);
-                    buf_in = new byte[4];
-                    Connection.Read(buf_in, 0, buf_in.Length, ReqParams.Timeout, CommUtils.ProtocolLogFormats.Hex, out logText); //считать значение из порта
-                    if (slog) WriteToLog(logText);
-
-                    if (CrcFunc.CalcCRC16(buf_in, buf_in.Length) == 0)
-                    {
+                        code = inBuf[1];
                         // тут проверка на корректность пароля, смена статуса открытого канала
-                        if (buf_in[1] == 0)
+                        if (inBuf[1] == 0)
                         {
-                            code = buf_in[1];
-                            opencnl = true;
-                            lastCommSucc = true;
-                            if (slog) WriteToLog("OK!");
+                            prop.opencnl = true;
                         }
                         else
                         {
-                            code = buf_in[1];
                             WriteToLog(ToLogString(code));
-                            lastCommSucc = true;
-                            if (slog) WriteToLog("OK!");
+                            prop.opencnl = false;
                         }
                     }
                     else
                     {
                         code = 0x10;
-                        WriteToLog(ToLogString(code));
-                        if (slog) WriteToLog("Ошибка!");
+                        string er = string.Concat(CommPhrases.ResponseError, " ", ToLogString(code));
+                        WriteToLog(er);
                     }
-                    if (Convert.ToInt32(buf_in[1]) == 0x05) opencnl = false;
-                    FinishRequest();
-                }
 
+                    prop.tik = t2;
+                    CommonProps[address] = prop;
+                }
             }
 
-            // Запрос коэффициентов трансформации напряжения и тока
-            if (opencnl && !Kui)
+            // Запрос информации счетчика - Серийный номер, дата выпуска, версия ПО, вариант исполнения
+            if (devTemplate.info && prop.opencnl && !prop.readInfo)
             {
-                lastCommSucc = false;
-                string logText;
-                Array.Resize(ref buf_out, 5); //изменить размер массива
-                buf_out[1] = 0x08; // 2.3 Запрос на чтение параметров
-                buf_out[2] = 0x02; // 2.3.3 Прочитать коэффициент трансформации счетчика
-                res = CrcFunc.CalcCRC16(buf_out, buf_out.Length - 2); //получить контрольную сумму
-                buf_out[buf_out.Length - 2] = (byte)(res % 256); //Добавить контрольную сумму к буферу посылки
-                buf_out[buf_out.Length - 1] = (byte)(res / 256);
-                Connection.Write(buf_out, 0, buf_out.Length, CommUtils.ProtocolLogFormats.Hex, out logText); //послать запрос в порт
-                if (slog) WriteToLog(logText);
-                System.Threading.Thread.Sleep(ReqParams.Delay);
+                requests.infoReq = Protocol.InfoReq(Address);
 
-                buf_in = new byte[7];
-                Connection.Read(buf_in, 0, buf_in.Length, ReqParams.Timeout, CommUtils.ProtocolLogFormats.Hex, out logText); //считать значение из порта
-                if (slog) WriteToLog(logText);
-                // тут проверка CRC и корректности ответа
+                Request(requests.infoReq, 19);
 
-                if (CrcFunc.CalcCRC16(buf_in, buf_in.Length) == 0)
+                if (lastCommSucc)
                 {
-                    Kui = true;
-                    //ku = Convert.ToInt32(Parametrs.ROR(BitConverter.ToUInt16(buf_in, 1), 8));
-                    ku = Convert.ToInt32(BitFunc.ROR(BitConverter.ToUInt16(buf_in, 1), 8));
-                    ki = Convert.ToInt32(BitFunc.ROR(BitConverter.ToUInt16(buf_in, 3), 8));
-                    lastCommSucc = true;
-                    if (slog) WriteToLog("OK!");
+                    int snNum = 0;
+                    int multip = 1;
+
+                    for (int d = 4; d > 0; d--)
+                    {
+                        int ch = Convert.ToInt32(inBuf[d]);
+                        snNum = (ch * multip) + snNum;
+                        multip = ch > 99 ? multip = multip * 1000 : multip = multip * 100;
+                    }
+
+                    prop.serial = snNum;                                           // Сохраняем серийный номер
+                    prop.made = new DateTime(2000 + inBuf[7], inBuf[6], inBuf[5]); // Сохраняем дату изготовления
+                    prop.Aconst = ConstA(inBuf[12]);                               // Сохраняем постоянну счетчика имп/квт*ч
+
                 }
                 else
                 {
-                    WriteToLog("Ошибка: Недопустимая команда");
-                    if (slog) WriteToLog("Ошибка!");
+                    // Данные со счетчика не считаны, чтение профилей средней мощности невозможно (заделка на будущее)
                 }
-                FinishRequest();
+                prop.readInfo = true;
+                CommonProps[address] = prop;
+            }
+
+            // Запрос коэффициентов трансформации напряжения и тока
+            if (prop.opencnl && !prop.Kui)
+            {
+                Request(requests.kuiReq, 7);
+
+                if (lastCommSucc)
+                {
+                    prop.Kui = true;
+                    prop.ku = Convert.ToInt32(BitFunc.ROR(BitConverter.ToUInt16(inBuf, 1), 8));
+                    prop.ki = Convert.ToInt32(BitFunc.ROR(BitConverter.ToUInt16(inBuf, 3), 8));
+                    prop.parkui = new int[] { prop.ki, prop.ki, prop.ki, 1, prop.ku, prop.ki, 1, 1, prop.ki, prop.ki, prop.ki, prop.ki, prop.ki };
+                }
+                else
+                {
+                    string er = string.Concat(CommPhrases.ResponseError, " Недопустимая команда");
+                    WriteToLog(er);
+                }
+                CommonProps[address] = prop;
             }
 
             // ------------Получить мгновенные значения P,Q,S,U,I вариант 2
             uint com14h = Convert.ToUInt32(mask_g1 & 0x1FFF); // проверка маски на необходимость чтения команды 08h с параметром 14h
 
-
             if (com14h != 0)
             {
-                lastCommSucc = false;
-                string logText;
                 int znx = 1; // начальное положение первого массива байт в ответе
-                float znac = 0;
-                Array.Resize(ref buf_out, i + 4); //изменить размер массива
-                buf_out[i] = 0x03; i++; // 1.3 Запрос на запись параметров
-                buf_out[i] = 0x08; i++; // 08h фиксация данных.
-                res = CrcFunc.CalcCRC16(buf_out, 3); //получить контрольную сумму
-                buf_out[i] = (byte)(res % 256); i++;
-                buf_out[i] = (byte)(res / 256);
+                double znac = 0;
 
-                Connection.Write(buf_out, 0, buf_out.Length, CommUtils.ProtocolLogFormats.Hex, out logText); //послать запрос в порт
-                if (slog) WriteToLog(logText);
-                System.Threading.Thread.Sleep(ReqParams.Delay);
-                buf_in = new byte[4];
-                Connection.Read(buf_in, 0, buf_in.Length, ReqParams.Timeout, CommUtils.ProtocolLogFormats.Hex, out logText); //считать значение из порта
-                if (slog) WriteToLog(logText);
-                // тут проверка CRC ответа и успешности команды фиксации данных
-
-                if (CrcFunc.CalcCRC16(buf_in, buf_in.Length) == 0 && opencnl)
+                if (readparam == "14h") // TEST 14h При чтении параметром 16 не нужна фиксация данных
                 {
-                    code = buf_in[1];
-                    lastCommSucc = true;
-                    if (slog) WriteToLog("OK!");
-                }
-                else
-                {
-                    code = 0x10;
-                    WriteToLog(ToLogString(code));
-                    if (slog) WriteToLog("Ошибка!");
-                }
-                FinishRequest();
-
-
-                i = 1;
-                Array.Resize(ref buf_out, i + 5); //изменить размер массива
-
-                buf_out[i] = 0x08; i++; // 2.3 Запрос на чтение параметров
-
-
-                if (readparam == "14h")
-                {
-                    buf_out[i] = 0x14; i++; // 14h Чтение зафиксированных вспомогательных параметров: мгновенной активной, реактивной, полной мощности, напряжения, тока, коэффициента мощности и частоты.
-                }
-                if (readparam == "16h")
-                {
-                    buf_out[i] = 0x16; i++; // 16h Чтение вспомогательных параметров: мгновенной активной, реактивной, полной мощности, напряжения, тока, коэффициента мощности и частоты.
-                }
-
-
-                for (int f = 0; f < nbwri.Length; f++)
-                {
-                    lastCommSucc = false;
-                    int bwrim = nbwri[f] & 0xf0;
-
-                    if (readparam == "16h")
+                    if (devTemplate.multicast)
                     {
-                        if (bwrim == 0xf0)
+                        DateTime datetime = DateTime.Now;
+
+                        if (prop.firstKp == Number) // Address
                         {
-                            buf_out[i - 2] = 0x05; // Переход на функцию 0x05 для чтения энергии от сброса при использовании чтения счетчика кодом 0x08 и параметром 0x16
-                            buf_out[i - 1] = 0x00;
-                            buf_out[i] = Convert.ToByte(nbwri[f] & 0x0f); i++; // Запись # тарифа
+                            // запись для всех КП времени фиксации и посылка команды фиксации данных
+                            for (int x = 0; x < CommonProps.Count; x++)
+                            {
+                                var Val = (MyDevice)CommonProps.ElementAt(x).Value;
+                                Val.dt = datetime;
+                            }
+                            CommonProps[address] = prop;
+                            Write(requests.fixDataReq);
+                            Thread.Sleep(ReqParams.Delay);
                         }
                         else
                         {
-                            buf_out[i] = Convert.ToByte(nbwri[f]); i++; // Запись BWRI кода
+                            // Тут сравнение времени фиксации и при необходимости отправка команды фиксации данных
+                            if (datetime.Subtract(prop.dt).TotalMinutes > fixTime)
+                            {
+                                //string time = string.Concat("Текущее время - ", Convert.ToString(datetime), " Разница - ", Convert.ToString(datetime.Subtract(prop.dt).TotalMinutes));
+                                //WriteToLog(time); // TEST TEST TEST
+                                
+                                Write(requests.fixDataReq);
+                                Thread.Sleep(ReqParams.Delay);
+                            }
                         }
                     }
-                    else
+                    else // используем команду фиксации по адресу счетчика
                     {
-                        buf_out[i] = Convert.ToByte(nbwri[f]); i++; // Запись BWRI кода
+                        Request(requests.fixDataReq, 4);
+                        if (lastCommSucc && prop.opencnl)
+                        {
+                            code = inBuf[1];
+                        }
+                        else
+                        {
+                            code = 0x10;
+                            string er = string.Concat(CommPhrases.ResponseError, "  ", ToLogString(code));
+                            WriteToLog(er);
+                        }
                     }
+                }
 
-                    byte[] zn_temp = new byte[4];
+                // --------- формирование запросов P,Q,S,U,I и энергия от сброса при параметре 14h или 16h
+                for (int f = 0; f < nbwri.Length; f++)
+                {
+                    int bwrim = nbwri[f] & 0xf0;
 
-                    res = CrcFunc.CalcCRC16(buf_out, 4); //получить контрольную сумму
-                    buf_out[i] = (byte)(res % 256); i++;
-                    buf_out[i] = (byte)(res / 256);
+                    requests.dataReq = Protocol.DataReq(Address, readparam, nbwri[f]);
 
-                    Connection.Write(buf_out, 0, buf_out.Length, CommUtils.ProtocolLogFormats.Hex, out logText); //послать запрос в порт
-                    if (slog) WriteToLog(logText);
-                    System.Threading.Thread.Sleep(ReqParams.Delay);
+                    Request(requests.dataReq, nb_length[f]);
 
-                    buf_in = new byte[nb_length[f]];
-
-                    Connection.Read(buf_in, 0, buf_in.Length, ReqParams.Timeout, CommUtils.ProtocolLogFormats.Hex, out logText); //считать значение из порта
-                    if (slog) WriteToLog(logText);
-                    // тут проверка CRC ответа
-
-                    if (CrcFunc.CalcCRC16(buf_in, buf_in.Length) == 0 && opencnl)
+                    if (lastCommSucc && prop.opencnl)
                     {
-                        lastCommSucc = true;
-                        if (slog) WriteToLog("OK!");
                         for (int zn = 0; zn < nparc[f]; zn++)
                         {
-                            Array.Copy(buf_in, znx, zn_temp, 0, nparb[f]);
-                            uint znac_temp = BitConverter.ToUInt32(zn_temp, 0);
+                            byte[] zn_temp = new byte[4];
+                            uint znac_temp = 0;
+
                             if (nparb[f] == 4)
                             {
+                                Array.Copy(inBuf, znx, zn_temp, 0, nparb[f]);                       // Копирование количества байт nparb[f] во временный буфер
+                                znac_temp = BitConverter.ToUInt32(zn_temp, 0);
+
                                 znac_temp = BitFunc.ROR(znac_temp, 16);
-                                if (nbwri[f] == 0x04 && (znac_temp & 0x40000000) >= 1) ennapr = -1; // определение направления Реактивной мощности
+                                if (nbwri[f] == 0x00 && (znac_temp & 0x80000000) >= 1) Napr = -1;   // определение направления Активной   мощности
+                                if (nbwri[f] == 0x04 && (znac_temp & 0x40000000) >= 1) Napr = -1;   // определение направления Реактивной мощности
                                 if (bwrim != 0xf0) znac_temp = znac_temp & 0x3fffffff;              // наложение маски для удаления направления для получения значения
                             }
                             else
-                            {
-                                znac_temp = BitFunc.ROR(znac_temp, 8);
-                                if (nbwri[f] == 0x04 && (znac_temp & 0x400000) >= 1) ennapr = -1;   // определение направления Реактивной мощности
-                                if (bwrim != 0x04) znac_temp = znac_temp & 0x3fffff;                // наложение маски для удаления направления для получения значения
+                            {   // тут исправления ошибка чтения мощности командой 16h
+                                Array.Copy(inBuf, znx, zn_temp, 0, 1);
+                                Array.Copy(inBuf, znx + 1, zn_temp, 2, 2);
+                                znac_temp = BitConverter.ToUInt32(zn_temp, 0);
 
-                                if (nbwri[f] == 0x30) znac_temp = znac_temp & 0x3ff;                // наложение маски на 3-х байтовую переменную косинуса
+                                znac_temp = BitFunc.ROR(znac_temp, 16);
+                                if (nbwri[f] == 0x00 && (znac_temp & 0x800000) >= 1) Napr = -1;   // определение направления Активной   мощности
+                                if (nbwri[f] == 0x04 && (znac_temp & 0x400000) >= 1) Napr = -1;   // определение направления Реактивной мощности
+                                if (bwrim != 0xf0) znac_temp = znac_temp & 0x3fffff;              // наложение маски для удаления направления для получения значения
+                                if (nbwri[f] == 0x30) znac_temp = znac_temp & 0x3ff;              // наложение маски на 3-х байтовую переменную косинуса
                             }
+
                             if (znac_temp == 0xffffffff && nparb[f] == 4)
                             {
-                                znac = Convert.ToSingle(double.NaN);
-                            }
-                            else
-                            {
-                                znac = Convert.ToSingle(znac_temp) / nbwrc[f] * parkui[f]; //получение значения с учетом разрещшающей способности
-                            }
-
-                            if (znac != Convert.ToSingle(double.NaN))
-                            {
-                                SetCurData(tag - 1, znac * ennapr, 1);
-                            }
-                            else
-                            {
                                 InvalidateCurData(tag - 1, 1);
+                            }
+                            else
+                            {
+                                znac = Convert.ToDouble(znac_temp) / nbwrc[f] * prop.parkui[f]; //получение значения с учетом разрещшающей способности
+                                SetCurData(tag - 1, znac * Napr, 1);
                             }
 
                             znx = znx + nparb[f];
                             tag++;
-                            ennapr = 1;
+                            Napr = 1;
                         }
-                        i = 3;
                         znx = 1;
                     }
                     else
                     {
-                        lastCommSucc = false;
-                        opencnl = false;
-                        if (slog) WriteToLog("Ошибка!");
-                        for (int zn = 0; zn < nparc[f]; zn++)
-                        {
-                            SetCurData(tag - 1, 0, 0);
-                            tag++;
-                        }
-                        i = 3;
+                        prop.opencnl = false;
+                        CommonProps[address] = prop;
+
+                        InvalidateCurData(tag - 1, nparc[f]);
+                        tag = tag + nparc[f];
                         znx = 1;
                     }
-                    FinishRequest();
                 }
             }
 
             //------------Получить пофазные значения накопленной энергии прямого направления  код запросв 0x05, параметр 0x60
-
             if (energyL != 0)
             {
-                lastCommSucc = false;
-                string logText;
-                i = 1;
-                Array.Resize(ref buf_out, i + 5); //изменить размер массива
-                buf_out[i] = 0x05; i++; // 2.2 Запросы на чтение массивов регистров накопленной энергии
-
-                buf_out[i] = 0x60; i++; // Параметр чтения накопленной энергии A+ от сброса по фазам
-
                 for (int f = 0; f < nenergy.Length; f++)
                 {
-                    buf_out[i] = Convert.ToByte(nenergy[f]); i++;
-                    res = CrcFunc.CalcCRC16(buf_out, 4); //получить контрольную сумму
-                    buf_out[i] = (byte)(res % 256); i++;
-                    buf_out[i] = (byte)(res / 256);
-                    Connection.Write(buf_out, 0, buf_out.Length, CommUtils.ProtocolLogFormats.Hex, out logText); //послать запрос в порт
-                    if (slog) WriteToLog(logText);
-                    System.Threading.Thread.Sleep(ReqParams.Delay);
-                    buf_in = new byte[15];
-                    Connection.Read(buf_in, 0, buf_in.Length, ReqParams.Timeout, CommUtils.ProtocolLogFormats.Hex, out logText); //считать значение из порта
-                    if (slog) WriteToLog(logText);
-                    // Тут проверка ответа на корректность
+                    requests.energyPReq = Protocol.EnergyPReq(Address, nenergy[f]);
+                    Request(requests.energyPReq, 15);
 
-                    if (CrcFunc.CalcCRC16(buf_in, buf_in.Length) == 0 && opencnl)
+                    // Тут проверка ответа на корректность и разбор значений
+                    if (lastCommSucc && prop.opencnl)
                     {
-                        code = buf_in[2];
-                        lastCommSucc = true;
-                        if (slog) WriteToLog("OK!");
-
+                        code = inBuf[2];
                         int znx = 1;
                         for (int zn = 0; zn < 3; zn++)
                         {
-                            uint znac_temp = BitConverter.ToUInt32(buf_in, znx);
+                            uint znac_temp = BitConverter.ToUInt32(inBuf, znx);
                             znac_temp = BitFunc.ROR(znac_temp, 16);
-                            float znac = Convert.ToSingle(znac_temp) / 1000 * ki;
+                            double znac = Convert.ToDouble(znac_temp) / 1000 * prop.ki;
                             SetCurData(tag - 1, znac, 1);
                             znx = znx + 4;
                             tag++;
@@ -784,16 +844,15 @@ namespace Scada.Comm.Devices
                     else
                     {
                         code = 0x10;
-                        WriteToLog(ToLogString(code));
-                        if (slog) WriteToLog("Ошибка!");
+                        string er = string.Concat(CommPhrases.ResponseError, "  ", ToLogString(code));
+                        WriteToLog(er);
 
                         InvalidateCurData(tag - 1, 3);
                         tag = tag + 3;
                     }
-                    i = 3;
                 }
 
-                FinishRequest();
+
             }
 
             bool change = chan_err(code);
@@ -813,9 +872,9 @@ namespace Scada.Comm.Devices
             }
             SetCurData(tag - 1, code, 1);
             tag++;
-            SetCurData(tag - 1, ki, 1);
+            SetCurData(tag - 1, prop.ki, 1);
             tag++;
-            SetCurData(tag - 1, ku, 1);
+            SetCurData(tag - 1, prop.ku, 1);
 
             tag = 1;
 
@@ -827,11 +886,72 @@ namespace Scada.Comm.Devices
         {
             base.SendCmd(cmd);
 
-
             CalcCmdStats(); // расчёт статистики
         }
 
-        
+        private void Request(byte[] request, int Cnt)
+        {
+            int tryNum = 0;
+            if (CommSucc) // Заменить на обработчик ошибок, которые не связаны с ошибками CRC, timeout и т.д.
+            {
+                lastCommSucc = false;
+                while (RequestNeeded(ref tryNum))
+                {
+                    string logText;
+                    WriteRequest(request, out logText);
+                    WriteToLog(logText);
+
+                    ReadAnswer(inBuf, Cnt, out logText);
+                    WriteToLog(logText);
+
+                    checkCRC(Cnt);
+
+                    if (!lastCommSucc)
+                    {
+                        Thread.Sleep(ReqParams.Delay);
+                    }
+                    FinishRequest();
+                    tryNum++;
+                }
+            }
+        }
+
+        private void checkCRC(int count)
+        {
+            if (read_cnt > 0)
+            {
+                ushort crc = CrcFunc.CalcCRC16(inBuf, count);
+                if (crc == 0)
+                {
+                    WriteToLog(CommPhrases.ResponseOK);
+                    lastCommSucc = true;
+                }
+                else WriteToLog(CommPhrases.ResponseCrcError);
+            }
+            else WriteToLog(CommPhrases.ResponseError);
+        }
+
+        private class Requests
+        {
+            public byte[] testCnlReq;   // запрос тестирования канала
+
+            public byte[] openCnlReq;   // запрос на открытие канала
+
+            public byte[] fixDataReq;   // запрос на фиксацию данных
+
+            public byte[] dataReq;      // запрос чтения данных
+
+            public byte[] energyPReq;   // запрос на чтение пофазной энергии А+ (0x05 0x60 тариф)
+
+            public byte[] kuiReq;       // запрос значений трансформации тока и напряжения
+
+            public byte[] infoReq;      // Запрос информации счетчика в ускоренном режиме (0x08 0x01) - 16 байт
+
+            public Requests()
+            {
+            }
+        }
+
         private void tagcreate(TagGroup taggroup, int idgr)
         {
             for (int i = 0; i < devTemplate.SndGroups[idgr].value.Count; i++)
