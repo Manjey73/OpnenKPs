@@ -37,6 +37,8 @@ namespace Scada.Comm.Devices.KpMercury23x
             this.btnCancel = new System.Windows.Forms.Button();
             this.labelPass = new System.Windows.Forms.Label();
             this.openFileDialog = new System.Windows.Forms.OpenFileDialog();
+            this.labelPass1 = new System.Windows.Forms.Label();
+            this.textPassA = new System.Windows.Forms.TextBox();
             this.SuspendLayout();
             // 
             // LineCmdText
@@ -48,7 +50,7 @@ namespace Scada.Comm.Devices.KpMercury23x
             // 
             // textPass
             // 
-            this.textPass.Location = new System.Drawing.Point(12, 104);
+            this.textPass.Location = new System.Drawing.Point(12, 63);
             this.textPass.Name = "textPass";
             this.textPass.Size = new System.Drawing.Size(245, 20);
             this.textPass.TabIndex = 29;
@@ -104,19 +106,37 @@ namespace Scada.Comm.Devices.KpMercury23x
             // labelPass
             // 
             this.labelPass.AutoSize = true;
-            this.labelPass.Location = new System.Drawing.Point(12, 79);
+            this.labelPass.Location = new System.Drawing.Point(12, 47);
             this.labelPass.Name = "labelPass";
-            this.labelPass.Size = new System.Drawing.Size(89, 13);
+            this.labelPass.Size = new System.Drawing.Size(117, 13);
             this.labelPass.TabIndex = 36;
-            this.labelPass.Text = "Device password";
+            this.labelPass.Text = "User  Device password";
             // 
             // openFileDialog
             // 
             this.openFileDialog.FileName = "openFileDialog";
             // 
+            // labelPass1
+            // 
+            this.labelPass1.AutoSize = true;
+            this.labelPass1.Location = new System.Drawing.Point(9, 86);
+            this.labelPass1.Name = "labelPass1";
+            this.labelPass1.Size = new System.Drawing.Size(121, 13);
+            this.labelPass1.TabIndex = 38;
+            this.labelPass1.Text = "Admin Device password";
+            // 
+            // textPass1
+            // 
+            this.textPassA.Location = new System.Drawing.Point(12, 102);
+            this.textPassA.Name = "textPass1";
+            this.textPassA.Size = new System.Drawing.Size(245, 20);
+            this.textPassA.TabIndex = 37;
+            // 
             // FormSetting
             // 
             this.ClientSize = new System.Drawing.Size(356, 216);
+            this.Controls.Add(this.labelPass1);
+            this.Controls.Add(this.textPassA);
             this.Controls.Add(this.labelPass);
             this.Controls.Add(this.btnCancel);
             this.Controls.Add(this.button2);
@@ -149,5 +169,7 @@ namespace Scada.Comm.Devices.KpMercury23x
         private System.Windows.Forms.Button btnCancel;
         private System.Windows.Forms.Label labelPass;
         private System.Windows.Forms.OpenFileDialog openFileDialog;
+        private System.Windows.Forms.Label labelPass1;
+        private System.Windows.Forms.TextBox textPassA;
     }
 }
