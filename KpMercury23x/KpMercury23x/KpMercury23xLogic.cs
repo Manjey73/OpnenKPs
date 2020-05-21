@@ -25,24 +25,19 @@
 
 using Scada.Comm.Channels;
 using Scada.Data.Models;
-using Scada.Data;
 using System;
 using System.Collections.Generic;
-using System.Text;
 using System.Linq;
-using System.Xml;
 using Scada.Data.Tables;
-using System.Windows.Forms;
 using ScadaCommFunc;
 using System.Threading;
-using System.Reflection;
 using Scada.Data.Configuration;
-
+using System.Text;
+using System.Reflection;
 
 
 namespace Scada.Comm.Devices
 {
-
     public class KpMercury23xLogic : KPLogic
     {
         private DevTemplate devTemplate = new DevTemplate();
@@ -62,7 +57,14 @@ namespace Scada.Comm.Devices
         {
             requests.testCnlReq = Protocol.TestCnlReq(Address);
             requests.openCnlReq = Protocol.OpenCnlReq(Address, uroven, Pass());
+            requests.openAdmReq = Protocol.OpenCnlReq(Address, "2", PassA());
+            requests.closeCnlReq = Protocol.WriteComReq(Address, 0x02);
+            requests.readTimeReq = Protocol.WriteCompReq(Address, 0x04, 0x00);
+            requests.lastSyncReq = Protocol.WriteCompReq(Address, 0x04, 0x02, new byte[] { 0xFF }); // Чтение последней записи журнала синхронизации времени
             requests.kuiReq = Protocol.KuiReq(Address);
+            requests.infoReq = Protocol.InfoReq(Address);
+            requests.curTimeReq = Protocol.CurTimeReq(Address);
+            requests.wordStatReq = Protocol.WriteCompReq(Address, 0x04, 0x14, new byte[] { 0xFF }); // Чтение последней записи журнала кода словосостояния прибора
 
             // Формирование запроса фиксации данных в зависимости от параметра multicast
             if (devTemplate.multicast)
@@ -79,6 +81,13 @@ namespace Scada.Comm.Devices
         {
             string kpNum_pass = string.Concat(Number.ToString(), "_pass");
             string pass = String.IsNullOrEmpty(CustomParams.GetStringParam(kpNum_pass, false, "")) ? password : CustomParams.GetStringParam(kpNum_pass, false, "");
+            return pass;
+        }
+
+        private string PassA()
+        {
+            string kpNum_passA = string.Concat(Number.ToString(), "_passA");
+            string pass = String.IsNullOrEmpty(CustomParams.GetStringParam(kpNum_passA, false, "")) ? passwordA : CustomParams.GetStringParam(kpNum_passA, false, "");
             return pass;
         }
 
@@ -107,19 +116,22 @@ namespace Scada.Comm.Devices
             public int serial = 0;              // Серийный номер счетчика
             public int Aconst = 500;            // Постоянная счетчика, по умолчанию 500 имп/квт*ч
             public DateTime made;               // Дата изготовления
+            public DateTime srezDt;             // Дата чтения архива
+            public DateTime LastSyncDt;         // Время последней синхронизации в приборе
 
             public override string ToString()
             {
-                string outprops = string.Concat("SN_", serial.ToString(), " Изготовлен ", made.ToString("dd.MM.yyyy"), " Пост.счетчика ", Aconst.ToString(), " имп/квт*ч");
+                string outprops = string.Concat("SN_", serial.ToString(), " Изготовлен ", made.ToString("dd.MM.yyyy"));
                 return outprops;
             }
+
         }
 
         protected virtual string address
         {
             get
             {
-                return  devTemplate.Name + "_" + Convert.ToString(Address); //  + "DevAddr_"
+                return devTemplate.Name + "_" + Convert.ToString(Address);
             }
         }
 
@@ -150,8 +162,6 @@ namespace Scada.Comm.Devices
                 case 0x03: logs = "Недостаточен уровень доступа"; break;
                 case 0x04: logs = "Внутренние часы корректировались"; break;
                 case 0x05: logs = "Не открыт канал связи"; break;
-                case 0x10: logs = "Нет ответа от прибора"; break;
-                case 0x11: logs = "Нет устройства с таким адресом"; break;
             }
             return logs;
         }
@@ -171,6 +181,23 @@ namespace Scada.Comm.Devices
                 case 0x05: consta = 250; break;
             }
             return consta;
+        }
+
+        /// <summary>
+        /// Преобразовать данные тега КП в строку
+        /// </summary>
+        protected override string ConvertTagDataToStr(int signal, SrezTableLight.CnlData tagData) // Необходимо продумать как передать сюда список типов переменных - текст, время, цифровое и т.д.
+        {
+            if (tagData.Stat > 0 && signal == 73)
+            {
+                byte[] data = BitConverter.GetBytes(Convert.ToUInt64(tagData.Val));
+                long N = BitConverter.ToInt64(data, 0);
+
+                Array.Resize(ref data, 6);
+                Array.Reverse(data);
+                return ScadaUtils.BytesToHex(data).ToString() + " hex";
+            }
+            return base.ConvertTagDataToStr(signal, tagData);
         }
 
         // Новый целочисленный массив с данными
@@ -256,14 +283,60 @@ namespace Scada.Comm.Devices
         private int[] nparb = new int[1];
         private int[] nparc = new int[1];
         private int[] nenergy = new int[1];
+        private bool readstatus = false;    // Читать статус счетчика
         private byte code_err = 0x0;
         private byte code = 0x0;
-        private int Napr = 1;       // Направление Активной или Реактивной мощности 1 = прямое (бит направления = 0), при обратном значение = -1
-        private double fixTime;     // по умолчанию разница времени фиксации 1 минута
+        private int Napr = 1;               // Направление Активной или Реактивной мощности 1 = прямое (бит направления = 0), при обратном значение = -1
+        private int fixTime = 30;           // по умолчанию разница времени фиксации 30 секунд
+        private int saveTime;               // Период сохранения данных БД
+        private bool timeSync = false;
+        private uint readPQSUI = 0;
+        private uint energyL = 0;
+        private int halfArch = 2;               // По умолчанию номер архивного среза
+        private int srezPeriod = 30;            // Период среза средних мощностей, по умолчанию 30 минут
+        private byte[] wordStat = new byte[8];  // массив байт для словосостояния прибора
+
+        private byte CMD;           // Command code (Код команды)
+        private byte PAR;           // Parametr code (Код параметра)
 
         private int mask_g1 = 0; // Входная переменная для выбора тегов
 
-        private string readparam, password, uroven; //входная строка для параметра команды 0x08, объявление переменной для пароля и уровня доступа
+        private string readparam, password, passwordA, uroven; //входная строка для параметра команды 0x08, объявление переменной для пароля и уровня доступа
+
+        /// <summary>
+        /// Параметр множителя переменных запросов
+        /// </summary>
+        public class ValParam
+        {
+            public double range;
+        }
+        private List<ValParam> ValPar = new List<ValParam>();
+
+        public class Profile
+        {
+            public string profileName;
+            public int signal;
+            public double range;
+            public int offset;
+        }
+        private List<Profile> profile = new List<Profile>();
+
+        // Активные команды шаблона
+        public class SetCommand
+        {
+            public string Name;
+            public int signal;
+            public int mode;
+            public byte[] setCommand;
+            public int scCnt;           // Количество принимаемы байт
+            public int datalen;         // длина блока данных в байтах
+        }
+        private List<SetCommand> setComm = new List<SetCommand>();
+
+        private Dictionary<int, SetCommand> ActiveCmd = new Dictionary<int, SetCommand>(); // Ключ = номер команды (сигнала) - Значение = Индекс Команды в списке активных команд
+
+        private Dictionary<int, KPTag> myTags = new Dictionary<int, KPTag>();
+
 
         public override void OnAddedToCommLine()
         {
@@ -297,17 +370,18 @@ namespace Scada.Comm.Devices
 
             if (devTemplate != null)
             {
+                readstatus = devTemplate.readStatus;
                 password = string.IsNullOrEmpty(devTemplate.password) ? "111111" : devTemplate.password;
+                passwordA = string.IsNullOrEmpty(devTemplate.AdmPass) ? "222222" : devTemplate.AdmPass;
+
                 uroven = string.IsNullOrEmpty(devTemplate.mode.ToString()) ? "1" : devTemplate.mode.ToString(); // Преобразование int '1' или '2' к строке для совместимости с кодом драйвера, по умолчанию '1' если строка пуста
                 readparam = string.IsNullOrEmpty(devTemplate.readparam) ? "14h" : devTemplate.readparam;
 
-                double result = 1;
-                // чтение параметра времени сравнения фиксации в минутах
-                if (!double.TryParse(devTemplate.fixtime, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.GetCultureInfo("ru-RU"), out result))
-                {
-                    if (!double.TryParse(devTemplate.fixtime, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.GetCultureInfo("en-US"), out result)) ;
-                }
-                fixTime = result;
+                saveTime = devTemplate.SaveTime;
+                timeSync = devTemplate.SyncTime;
+                halfArch = devTemplate.halfArchStat == 0 ? halfArch : devTemplate.halfArchStat;
+
+                fixTime = devTemplate.fixtime == 0 ? fixTime : devTemplate.fixtime;
 
                 if (devTemplate.SndGroups.Count != 0) // Определить активные запросы объектов и записать в список индексы запросов для создания тегов
                 {
@@ -317,6 +391,126 @@ namespace Scada.Comm.Devices
                         {
                             mask_g1 = BitFunc.SetBit(mask_g1, devTemplate.SndGroups[sg].Bit, true);
                         }
+                    }
+                }
+
+                if (devTemplate.ProfileGroups.Count != 0) //Определить наличие запросов профилей
+                {
+                    for (int i = 0; i < devTemplate.ProfileGroups.Count; i++)
+                    {
+                        if (devTemplate.ProfileGroups[i].Active)
+                        {
+                            for (int k = 0; k < devTemplate.ProfileGroups[i].value.Count; k++)
+                            {
+                                if (devTemplate.ProfileGroups[i].value[k].active)
+                                {
+                                    profile.Add(new Profile
+                                    {
+                                        profileName = devTemplate.ProfileGroups[i].value[k].name,
+                                        signal = devTemplate.ProfileGroups[i].value[k].signal,
+                                        range = SToDouble(devTemplate.ProfileGroups[i].value[k].range),
+                                        offset = k * 2
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (devTemplate.CmdGroups.Count > 0)
+                {
+                    for (int c = 0; c < devTemplate.CmdGroups.Count; c++)
+                    {
+                        int errorCnt = 0;
+                        byte[] comm = null;
+                        byte[] cData = null;
+                        string paras = null;
+                        int lendata = 0;
+
+                        if (devTemplate.CmdGroups[c].Active)
+                        {
+                            int cnt_ = devTemplate.CmdGroups[c].inCnt;
+
+                            try
+                            {
+                                byte[] cmd_ = ScadaUtils.HexToBytes(devTemplate.CmdGroups[c].Cmd, true);
+                                CMD = cmd_[0];
+                            }
+                            catch
+                            {
+                                WriteToLog(string.Format(Localization.UseRussian ?
+                                    "Ошибка задания кода команды. Строка команды не является Hex или пуста. Индекс CmdGroup = {0}" :
+                                    "Error setting command сode. The command line is not Hex or empty. Index CmdGroup = {0}", c));
+                                errorCnt++;
+                            }
+
+                            try
+                            {
+                                paras = string.IsNullOrEmpty(devTemplate.CmdGroups[c].Par) ? null : devTemplate.CmdGroups[c].Par;
+                                if (paras != null)
+                                {
+                                    byte[] par_ = ScadaUtils.HexToBytes(devTemplate.CmdGroups[c].Par, true);
+                                    PAR = par_[0];
+                                }
+                            }
+                            catch
+                            {
+                                WriteToLog(string.Format(Localization.UseRussian ?
+                                    "Ошибка задания параметра команды. Строка параметров не является Hex. Индекс CmdGroup = {0}" :
+                                    "Error setting the command parameter. The parameter string is not Hex. Index CmdGroup = {0}", c));
+                                errorCnt++;
+                            }
+
+                            try
+                            {
+                                string datas = string.IsNullOrEmpty(devTemplate.CmdGroups[c].Data) ? null : devTemplate.CmdGroups[c].Data;
+                                if (datas != null)
+                                {
+                                    byte[] data_ = ScadaUtils.HexToBytes(datas, true);
+                                    Array.Resize(ref cData, data_.Length);
+                                    Array.Copy(data_, cData, data_.Length);
+                                    lendata = data_.Length;
+                                }
+                            }
+                            catch
+                            {
+                                WriteToLog(string.Format(Localization.UseRussian ?
+                                    "Ошибка: строка данных не является Hex. Индекс CmdGroup = {0}" :
+                                    "Error: the data string is not Hex. Index CmdGroup = {0}", c));
+                                errorCnt++;
+                            }
+
+                            if (paras != null)
+                            {
+                                comm = Protocol.WriteCompReq(Address, CMD, PAR, cData);
+                            }
+                            else
+                            {
+                                comm = Protocol.WriteComReq(Address, CMD, cData);
+                            }
+
+                            if (errorCnt == 0)
+                            {
+                                setComm.Add(new SetCommand
+                                {
+                                    Name = devTemplate.CmdGroups[c].Name,
+                                    signal = devTemplate.CmdGroups[c].Signal,
+                                    mode = devTemplate.CmdGroups[c].Mode,
+                                    setCommand = comm,
+                                    scCnt = cnt_,
+                                    datalen = lendata
+                                });
+                            }
+                        }
+                    }
+                }
+
+                // Сохранить в словаре сигналы  и CmdGroup активных команд
+                foreach (var activecmd in setComm)
+                {
+                    if (!ActiveCmd.ContainsKey(activecmd.signal))
+                    {
+                        ActiveCmd.Add(activecmd.signal, activecmd);
                     }
                 }
             }
@@ -338,8 +532,31 @@ namespace Scada.Comm.Devices
                 Array.Copy(parc_16, parc, 13);
             }
 
+
+            readPQSUI = Convert.ToUInt32(mask_g1 & 0x1FFF); // проверка маски на необходимость чтения мгновенных значений
+
             int mgn_znac = mask_g1 & 0xFF; // отсечь мгновенные значения для организации отображения тегов
             int energy = mask_g1 & 0x3FF00; // Отсечь параметры энергии для организации отображения тегов
+
+            uint par14h = Convert.ToUInt32(mask_g1 & 0x1FFF); // отсечь количество параметров для команды 08h и параметра 14h
+
+            energyL = Convert.ToUInt32(mask_g1 & 0x3E000); // Проверка наличия опроса значений энергии прямого направления
+            energyL = BitFunc.ROR(energyL, 13);
+
+            if (!newmass)
+            {
+                nbwri = nmass_int(bwri, par14h); // Создание новых массивов для команды 08h параметр 14h для чтения согласно битовой маске.
+                nbwrc = nmass_int(bwrc, par14h);
+                nb_length = nmass_int(b_length, par14h);
+                nparb = nmass_int(parb, par14h);
+                nparc = nmass_int(parc, par14h);
+                newmass = true;
+            }
+            if (!newenergy)
+            {
+                nenergy = nmass_int(massenergy, energyL); // Создание нового массива значений энергии по фазам от сброса согласно битовой маске
+                newenergy = true;
+            }
 
             List<TagGroup> tagGroups = new List<TagGroup>();
             TagGroup tagGroup;
@@ -484,20 +701,45 @@ namespace Scada.Comm.Devices
                 tagGroups.Add(tagGroup);
             }
 
-            tagGroup = new TagGroup("Статус:");
-            tagGroup.KPTags.Add(new KPTag(70, "Код ошибки:"));
-            tagGroup.KPTags.Add(new KPTag(71, "коэфф. трансформации тока:"));
-            tagGroup.KPTags.Add(new KPTag(72, "коэфф. трансформации напряжения:"));
-            tagGroups.Add(tagGroup);
+            if (profile.Count > 0) // Нужен индекс группы профилей ?
+            {
+                tagGroup = new TagGroup("Профили мощностей");
+
+                for (int p = 0; p < profile.Count; p++)
+                {
+                    tagGroup.KPTags.Add(new KPTag(profile[p].signal, profile[p].profileName));
+                }
+                tagGroups.Add(tagGroup);
+            }
+
+            if (readstatus)
+            {
+                tagGroup = new TagGroup("Статус:");
+                tagGroup.KPTags.Add(new KPTag(70, "Код ошибки:"));
+                tagGroup.KPTags.Add(new KPTag(71, "коэфф. трансформации тока:"));
+                tagGroup.KPTags.Add(new KPTag(72, "коэфф. трансформации напряжения:"));
+                tagGroup.KPTags.Add(new KPTag(73, "Слово состояния:")); // На будущее
+                tagGroups.Add(tagGroup);
+            }
+
 
             InitKPTags(tagGroups);
-        }
 
+            // Добавить в словарь активные сигналы и KPTags, соответсвующие сигналам
+            // для дальнейшего использования
+            foreach (var tag in KPTags)
+            {
+                if (!myTags.ContainsKey(tag.Signal))
+                {
+                    myTags.Add(tag.Signal, tag);
+                }
+            }
+        }
 
         //---------------------------------------------------------------
         public KpMercury23xLogic(int number) : base(number)
         {
-            inBuf = new byte[100];
+            inBuf = new byte[300];
             requests = new Requests();
             CanSendCmd = true;
             ConnRequired = true;
@@ -534,7 +776,7 @@ namespace Scada.Comm.Devices
         /// </summary>
         private void ReadAnswer(byte[] buffer, int count, out string logText)
         {
-            read_cnt = Connection.Read(buffer, 0, count, ReqParams.Timeout, CommUtils.ProtocolLogFormats.Hex, out logText); //считать значение из порта
+            read_cnt = Connection.Read(buffer, 0, count, ReqParams.Timeout, CommUtils.ProtocolLogFormats.Hex, out logText);
         }
 
         //-------------------------
@@ -561,30 +803,9 @@ namespace Scada.Comm.Devices
                     var Val = (MyDevice)CommonProps.ElementAt(x).Value;
                     Val.firstFix = true;
                 }
-                CommonProps[address] = prop;
             }
 
             CommSucc = true;
-
-            uint par14h = Convert.ToUInt32(mask_g1 & 0x1FFF); // отсечь количество параметров для команды 08h и параметра 14h
-
-            uint energyL = Convert.ToUInt32(mask_g1 & 0x3E000); // Проверка наличия опроса значений энергии прямого направления
-            energyL = BitFunc.ROR(energyL, 13);
-
-            if (!newmass)
-            {
-                nbwri = nmass_int(bwri, par14h); // Создание новых массивов для команды 08h параметр 14h для чтения согласно битовой маске.
-                nbwrc = nmass_int(bwrc, par14h);
-                nb_length = nmass_int(b_length, par14h);
-                nparb = nmass_int(parb, par14h);
-                nparc = nmass_int(parc, par14h);
-                newmass = true;
-            }
-            if (!newenergy)
-            {
-                nenergy = nmass_int(massenergy, energyL); // Создание нового массива значений энергии по фазам от сброса согласно битовой маске
-                newenergy = true;
-            }
 
             if (!prop.testcnl)
             {
@@ -597,13 +818,12 @@ namespace Scada.Comm.Devices
                 }
                 else
                 {
-                    code = 0x11;
-                    WriteToLog(ToLogString(code));
                     CommSucc = false;
                 }
             }
 
-            if (prop.testcnl) // Открытие канала с уровнем доступа согласно введенного пароля.
+            // Открытие канала с уровнем доступа согласно введенного пароля.
+            if (prop.testcnl)
             {
                 long t2 = Ticks();
                 if ((t2 > (prop.tik + 240000)) || !prop.opencnl)
@@ -611,37 +831,100 @@ namespace Scada.Comm.Devices
                     // Запрос на открытие канала
                     Request(requests.openCnlReq, 4);
 
+                    if (lastCommSucc) prop.opencnl = true;
+                    prop.tik = t2;
+                }
+            }
+
+            // Определить начало нового дня, возможна синхронизация времени или нет
+            if (prop.opencnl && timeSync && DateTime.Today > prop.LastSyncDt)
+            {
+                DateTime nowDt = DateTime.Now; // запрос времени с секундами, минутами, часами
+                bool needSync = false;
+                DateTime lastSyncDt = DateTime.MinValue;
+
+                // Чтение времени последней синхронизации счетчика
+                Request(requests.lastSyncReq, 16);
+
+                if (lastCommSucc)
+                {
+                    lastSyncDt = new DateTime(2000 + (int)ConvFunc.BcdToDec(new byte[] { inBuf[6] }), (int)ConvFunc.BcdToDec(new byte[] { inBuf[5] }), (int)ConvFunc.BcdToDec(new byte[] { inBuf[4] }));
+                    prop.LastSyncDt = lastSyncDt;
+
+                    if (DateTime.Today > lastSyncDt)
+                    {
+                        needSync = true;
+                    }
+                }
+
+                if (needSync)
+                {
+                    Request(requests.readTimeReq, 11);
                     if (lastCommSucc)
                     {
-                        code = inBuf[1];
-                        // тут проверка на корректность пароля, смена статуса открытого канала
-                        if (inBuf[1] == 0)
-                        {
-                            prop.opencnl = true;
-                        }
-                        else
-                        {
-                            WriteToLog(ToLogString(code));
-                            prop.opencnl = false;
-                        }
-                    }
-                    else
-                    {
-                        code = 0x10;
-                        string er = string.Concat(CommPhrases.ResponseError, " ", ToLogString(code));
-                        WriteToLog(er);
-                    }
+                        DateTime readDt = new DateTime(2000 + (int)ConvFunc.BcdToDec(new byte[] { inBuf[7] }), (int)ConvFunc.BcdToDec(new byte[] { inBuf[6] }), (int)ConvFunc.BcdToDec(new byte[] { inBuf[5] }), (int)ConvFunc.BcdToDec(new byte[] { inBuf[3] }), (int)ConvFunc.BcdToDec(new byte[] { inBuf[2] }), (int)ConvFunc.BcdToDec(new byte[] { inBuf[1] }));
 
-                    prop.tik = t2;
-                    CommonProps[address] = prop;
+                        // Если время счетчика перешло на новый день
+                        if (readDt > DateTime.Today)
+                        {
+                            if (nowDt.Subtract(readDt).TotalSeconds > Math.Abs(20))
+                            {
+                                int second = 0;
+                                int minutes = 0;
+                                int hours = 0;
+
+                                // Часы в счетчике отстают или спешат больше 4-х минут
+                                if (nowDt.Subtract(readDt).TotalMinutes > Math.Abs(4))
+                                {
+                                    if (nowDt.Subtract(readDt).TotalMinutes > 0)
+                                    {
+                                        readDt = readDt.AddMinutes(3);
+                                    }
+                                    else
+                                    {
+                                        readDt = readDt.AddMinutes(-3);
+                                    }
+                                    second = readDt.Second;
+                                    minutes = readDt.Minute;
+                                    hours = readDt.Hour;
+                                }
+                                else
+                                {
+                                    second = nowDt.Second;
+                                    minutes = nowDt.Minute;
+                                    hours = nowDt.Hour;
+                                }
+
+                                byte sec = (byte)ConvFunc.DecToBCD(second);
+                                byte min = (byte)ConvFunc.DecToBCD(minutes);
+                                byte hour = (byte)ConvFunc.DecToBCD(hours);
+                                Request(Protocol.WriteCompReq(Address, 0x03, 0x0D, new byte[] { sec, min, hour }), 4, string.Format(Localization.UseRussian ? "Команда синхронизация времени" : "Time synchronization command"));
+                                if (lastCommSucc)
+                                {
+                                    WriteToLog(string.Format(Localization.UseRussian ?
+                                        "ОК! Команда Выполнена успешно" :
+                                        "ОК! Command completed successfully"));
+                                }
+                                else
+                                {
+                                    WriteToLog(string.Format(Localization.UseRussian ?
+                                        "Ошибка: Команда не выполнена" :
+                                        "Error: Command not executed"));
+                                }
+                            }
+                            else
+                            {
+                                // Если расхождение меньше 20 сек
+                                prop.LastSyncDt = nowDt;
+                            }
+                        }
+                    }
                 }
             }
 
             // Запрос информации счетчика - Серийный номер, дата выпуска, версия ПО, вариант исполнения
             if (devTemplate.info && prop.opencnl && !prop.readInfo)
             {
-                requests.infoReq = Protocol.InfoReq(Address);
-
                 Request(requests.infoReq, 19);
 
                 if (lastCommSucc)
@@ -655,19 +938,17 @@ namespace Scada.Comm.Devices
                         snNum = (ch * multip) + snNum;
                         multip = ch > 99 ? multip = multip * 1000 : multip = multip * 100;
                     }
-
                     prop.serial = snNum;                                           // Сохраняем серийный номер
                     prop.made = new DateTime(2000 + inBuf[7], inBuf[6], inBuf[5]); // Сохраняем дату изготовления
                     prop.Aconst = ConstA(inBuf[12]);                               // Сохраняем постоянну счетчика имп/квт*ч
-
                 }
                 else
                 {
                     // Данные со счетчика не считаны, чтение профилей средней мощности невозможно (заделка на будущее)
                 }
                 prop.readInfo = true;
-                CommonProps[address] = prop;
             }
+
 
             // Запрос коэффициентов трансформации напряжения и тока
             if (prop.opencnl && !prop.Kui)
@@ -686,18 +967,15 @@ namespace Scada.Comm.Devices
                     string er = string.Concat(CommPhrases.ResponseError, " Недопустимая команда");
                     WriteToLog(er);
                 }
-                CommonProps[address] = prop;
             }
 
             // ------------Получить мгновенные значения P,Q,S,U,I вариант 2
-            uint com14h = Convert.ToUInt32(mask_g1 & 0x1FFF); // проверка маски на необходимость чтения команды 08h с параметром 14h
-
-            if (com14h != 0)
+            if (readPQSUI != 0)
             {
                 int znx = 1; // начальное положение первого массива байт в ответе
                 double znac = 0;
 
-                if (readparam == "14h") // TEST 14h При чтении параметром 16 не нужна фиксация данных
+                if (readparam == "14h") // При чтении параметром 16h не нужна фиксация данных
                 {
                     if (devTemplate.multicast)
                     {
@@ -711,14 +989,13 @@ namespace Scada.Comm.Devices
                                 var Val = (MyDevice)CommonProps.ElementAt(x).Value;
                                 Val.dt = datetime;
                             }
-                            CommonProps[address] = prop;
                             Write(requests.fixDataReq);
                             Thread.Sleep(ReqParams.Delay);
                         }
                         else
                         {
                             // Тут сравнение времени фиксации и при необходимости отправка команды фиксации данных
-                            if (datetime.Subtract(prop.dt).TotalMinutes > fixTime)
+                            if (datetime.Subtract(prop.dt).TotalSeconds > fixTime)
                             {
                                 Write(requests.fixDataReq);
                                 Thread.Sleep(ReqParams.Delay);
@@ -731,12 +1008,6 @@ namespace Scada.Comm.Devices
                         if (lastCommSucc && prop.opencnl)
                         {
                             code = inBuf[1];
-                        }
-                        else
-                        {
-                            code = 0x10;
-                            string er = string.Concat(CommPhrases.ResponseError, "  ", ToLogString(code));
-                            WriteToLog(er);
                         }
                     }
                 }
@@ -768,7 +1039,7 @@ namespace Scada.Comm.Devices
                                 if (bwrim != 0xf0) znac_temp = znac_temp & 0x3fffffff;              // наложение маски для удаления направления для получения значения
                             }
                             else
-                            {   // тут исправления ошибка чтения мощности командой 16h
+                            {   
                                 Array.Copy(inBuf, znx, zn_temp, 0, 1);
                                 Array.Copy(inBuf, znx + 1, zn_temp, 2, 2);
                                 znac_temp = BitConverter.ToUInt32(zn_temp, 0);
@@ -786,8 +1057,10 @@ namespace Scada.Comm.Devices
                             }
                             else
                             {
-                                znac = Convert.ToDouble(znac_temp) / nbwrc[f] * prop.parkui[f]; //получение значения с учетом разрещшающей способности
-                                SetCurData(tag - 1, znac * Napr, 1);
+                                //получение значения с учетом разрещшающей способности
+                                znac = Convert.ToDouble(znac_temp) / nbwrc[f] * prop.parkui[f];
+                                // Значение умножается на множитель, если его нет, то он равен 1
+                                SetCurData(tag - 1, znac * Napr * ValPar[tag - 1].range, 1);
                             }
 
                             znx = znx + nparb[f];
@@ -799,8 +1072,6 @@ namespace Scada.Comm.Devices
                     else
                     {
                         prop.opencnl = false;
-                        CommonProps[address] = prop;
-
                         InvalidateCurData(tag - 1, nparc[f]);
                         tag = tag + nparc[f];
                         znx = 1;
@@ -819,7 +1090,6 @@ namespace Scada.Comm.Devices
                     // Тут проверка ответа на корректность и разбор значений
                     if (lastCommSucc && prop.opencnl)
                     {
-                        code = inBuf[2];
                         int znx = 1;
                         for (int zn = 0; zn < 3; zn++)
                         {
@@ -833,41 +1103,137 @@ namespace Scada.Comm.Devices
                     }
                     else
                     {
-                        code = 0x10;
-                        string er = string.Concat(CommPhrases.ResponseError, "  ", ToLogString(code));
-                        WriteToLog(er);
-
                         InvalidateCurData(tag - 1, 3);
                         tag = tag + 3;
                     }
                 }
+            }
 
+            // Чтение профилей мощностей - Вид энергии 0 (A+, A-, R+, R-)
+            if (LastSessDT.Subtract(prop.srezDt) > TimeSpan.FromMinutes(srezPeriod)) // TotalMinuts - 30 заменить на полученное из счетчика
+            {
+                if (profile.Count > 0)
+                {
+                    Request(Protocol.WriteCompReq(Address, 0x08, 0x13), 12); // Чтение последней записи среза мощностей
+                    DateTime dt = DateTime.Now;
 
+                    int ramstart = 0;
+                    if (lastCommSucc)
+                    {
+                        // -------Определить дату последней записи профиля средних мощностей ---------
+                        dt = new DateTime(2000 + (int)ConvFunc.BcdToDec(new byte[] { inBuf[8] }), (int)ConvFunc.BcdToDec(new byte[] { inBuf[7] }), (int)ConvFunc.BcdToDec(new byte[] { inBuf[6] }), (int)ConvFunc.BcdToDec(new byte[] { inBuf[4] }), (int)ConvFunc.BcdToDec(new byte[] { inBuf[5] }), 0);
+
+                        srezPeriod = inBuf[9]; // Проверка периода среза и запись значения в переменную, по умолчанию 30 минут
+
+                        // Последняя ячейка памяти записи средней мощности
+                        byte[] NumCell = new byte[2];
+                        Array.Copy(inBuf, 1, NumCell, 0, 2);
+                        Array.Reverse(NumCell);
+                        // Адрес последней ячейки памяти
+                        ramstart = (BitConverter.ToUInt16(NumCell, 0) * 16);
+                    }
+                    else
+                    {
+                        if (inBuf[1] == 0x05) prop.opencnl = false;
+                    }
+
+                    // Пока только Вид энергии 0 (A+, A-, R+, R-)
+                    requests.readRomReq = Protocol.ReadRomReq(Address, 0, 3, ramstart, 15); // прочитать последнюю запись, 15 байт
+                    Request(requests.readRomReq, 18); // Чтение ROM
+
+                    if (lastCommSucc)
+                    {
+                        prop.srezDt = dt;
+                        DateTime nowDt = DateTime.Now;
+                        // Обработка профилей мощности
+                        int znx = 8;
+                        // Определение статуса среза средниих мощностей false = Архивный (Полный срез), true = Неполный срез, номер задается
+                        // параметром шаблона halfArchStat, необходимо предварительно создать Номер и цвет в Проект - Справочники - Типы каналов 
+                        bool halfSrez = (inBuf[1] & 0x02) > 0;
+
+                        if (LastSessDT.Subtract(prop.srezDt) > TimeSpan.FromMinutes(0))
+                        {
+                            double second = saveTime != 0 ? LastSessDT.Subtract(prop.srezDt).TotalSeconds : 0;
+                            DateTime writeDt = dt;
+
+                            double tme = 0;
+                            do
+                            {
+                                // Формируем новый архивный срез по количеству параметров прибора
+                                TagSrez srez = new TagSrez(profile.Count);
+                                srez.DateTime = writeDt.AddSeconds(tme);
+
+                                for (int pf = 0; pf < profile.Count; pf++)
+                                {
+                                    // считаем среднее мощности согласно формуле раздела 2.4
+                                    double prof = ((double)BitConverter.ToUInt16(inBuf, znx + profile[pf].offset) * (60 / inBuf[7]) / (2 * prop.Aconst));
+                                    int cnlStat = halfSrez ? halfArch : 2;
+
+                                    srez.KPTags[pf] = KPTags[myTags[profile[pf].signal].Index];
+                                    srez.TagData[pf] = new SrezTableLight.CnlData(prof * profile[pf].range, cnlStat);
+                                    // Запись в текущие промежутки последней записи если время saveTime не равно 0, тогда запись в точку времени среза
+                                    if (saveTime != 0) SetCurData(myTags[profile[pf].signal].Index, prof * profile[pf].range, cnlStat);
+                                }
+
+                                srez.Descr = "Запись средних мощностей " + nowDt.ToString();
+                                AddArcSrez(srez); // Записываем архивный срез в БД RapidScada для текущего прибора
+
+                                tme = tme + saveTime;
+                            }
+                            while (tme < second);
+                        }
+                    }
+                    else
+                    {
+                        if (inBuf[1] == 0x05) prop.opencnl = false;
+                    }
+                }
+            }
+
+            // У статуса и коэффициентов фиксированные номера сигналов
+            if (readstatus)
+            {
+                SetCurData(myTags[70].Index, code, 1);
+                SetCurData(myTags[71].Index, prop.ki, 1);
+                SetCurData(myTags[72].Index, prop.ku, 1);
+            }
+
+            // Чтение последней записи журнала кода состояния прибора
+            if (prop.opencnl && readstatus)
+            {
+                Request(requests.wordStatReq, 16);
+                if (lastCommSucc)
+                {
+                    Array.Copy(inBuf, 7, wordStat, 4, 2);
+                    Array.Copy(inBuf, 9, wordStat, 2, 2);
+                    Array.Copy(inBuf, 11, wordStat, 0, 2);
+                    SetCurData(myTags[73].Index, BitConverter.ToUInt64(wordStat, 0), 1);
+                }
+                else
+                {
+                    InvalidateCurData(myTags[73].Index, 1);
+                }
             }
 
             bool change = chan_err(code);
 
-            if (change)
+            if (readstatus && change)
             {
-                int even = 2;
-                if (code != 0) even = 15;
+                int even = 2;               // Зеленый цвет события
+                if (code != 0) even = 15;   // Красный цвет события
                 // генерация события
-                KPEvent kpEvent = new KPEvent(DateTime.Now, Number, KPTags[tag - 1]);
-                kpEvent.NewData = new SrezTableLight.CnlData(curData[tag - 1].Val, even);
+                KPEvent kpEvent = new KPEvent(DateTime.Now, Number, KPTags[myTags[70].Index]);
+                kpEvent.NewData = new SrezTableLight.CnlData(curData[myTags[70].Index].Val, even);
                 kpEvent.Descr = ToLogString(code);
                 AddEvent(kpEvent);
                 CommLineSvc.FlushArcData(this);
                 change = false;
                 code_err = code;
             }
-            SetCurData(tag - 1, code, 1);
-            tag++;
-            SetCurData(tag - 1, prop.ki, 1);
-            tag++;
-            SetCurData(tag - 1, prop.ku, 1);
 
             tag = 1;
 
+            CommonProps[address] = prop; // записать данные в общие свойства
             CalcSessStats(); // расчёт статистики
         }
 
@@ -875,18 +1241,118 @@ namespace Scada.Comm.Devices
         public override void SendCmd(Command cmd)
         {
             base.SendCmd(cmd);
+            lastCommSucc = false;
+            byte[] bindata = null;
 
+            MyDevice prop = (MyDevice)CommonProps[address]; // получить данные из общих свойств
+
+            double cmdVal = cmd.CmdVal;
+            int cmdNum = cmd.CmdNum;
+
+            if (ActiveCmd.ContainsKey(cmdNum))
+            {
+                // Определить уровень команды, пользовательский или администратора
+                // Если основной уровень 1 - пользователь, а команда с уровнем 2 - Админ, 
+                // закрываем канал, открываем с уровнем администратора
+                if (uroven != "2" && ActiveCmd[cmdNum].mode == 2)
+                {
+                    Request(requests.closeCnlReq, 4); // закрытие канала
+                    if (lastCommSucc)
+                    {
+                        // Изменить атрибут открытого канала на false
+                        prop.opencnl = false;
+
+                        Request(requests.openAdmReq, 4);
+                        if (lastCommSucc)
+                        {
+                            // Выполнить команду - по сути изменить параметр что канал открыт
+                            prop.opencnl = true;
+                        }
+                    }
+                }
+
+                if ((cmd.CmdTypeID == BaseValues.CmdTypes.Standard || cmd.CmdTypeID == BaseValues.CmdTypes.Binary) && prop.opencnl) // Если канал открыт, выполняем команду
+                {
+                    if (cmd.CmdTypeID == BaseValues.CmdTypes.Standard)
+                    {
+                        Request(ActiveCmd[cmdNum].setCommand, ActiveCmd[cmdNum].scCnt, string.Format(Localization.UseRussian ? "Отправка команды {0}" : "Sending a command {0}", ActiveCmd[cmdNum].Name));
+                        if (lastCommSucc)
+                        {
+                            WriteToLog(string.Format(Localization.UseRussian ?
+                                "ОК! Команда {0} Выполнена успешно" :
+                                "ОК! Command {0} completed successfully", ActiveCmd[cmdNum].Name));
+                        }
+                        else
+                        {
+                            WriteToLog(string.Format(Localization.UseRussian ?
+                                "Ошибка: Команда {0} не выполнена" :
+                                "Error: Command {0} not executed", ActiveCmd[cmdNum].Name));
+                        }
+                    }
+                    if (cmd.CmdTypeID == BaseValues.CmdTypes.Binary)
+                    {
+                        bindata = new byte[cmd.CmdData.Length];
+                        bindata = cmd.CmdData;
+
+                        if (bindata.Length == ActiveCmd[cmdNum].datalen)
+                        {
+                            // Индекс начала блока данных в запросе
+                            int startbindat = ActiveCmd[cmdNum].setCommand.Length - bindata.Length - 2;
+                            byte[] DataBin = new byte[ActiveCmd[cmdNum].setCommand.Length];
+                            Array.Copy(ActiveCmd[cmdNum].setCommand, 0, DataBin, 0, startbindat);
+                            Array.Copy(cmd.CmdData, 0, DataBin, startbindat, cmd.CmdData.Length);
+                            ushort res = CrcFunc.CalcCRC16(DataBin, DataBin.Length - 2);
+                            DataBin[DataBin.Length - 2] = (byte)(res % 256);                // добавить контрольную сумму к буферу посылки
+                            DataBin[DataBin.Length - 1] = (byte)(res / 256);
+
+                            Request(DataBin, ActiveCmd[cmdNum].scCnt, string.Format(Localization.UseRussian ? "Отправка команды {0}" : "Sending a command {0}", ActiveCmd[cmdNum].Name));
+
+                            if (lastCommSucc)
+                            {
+                                WriteToLog(string.Format(Localization.UseRussian ?
+                                    "ОК! Команда {0} Выполнена успешно" :
+                                    "ОК! Command {0} completed successfully", ActiveCmd[cmdNum].Name));
+                            }
+                            else
+                            {
+                                WriteToLog(string.Format(Localization.UseRussian ?
+                                    "Ошибка: Команда {0} не выполнена" :
+                                    "Error: Command {0} not executed", ActiveCmd[cmdNum].Name));
+                            }
+                        }
+                        else
+                        {
+                            WriteToLog(string.Format(Localization.UseRussian ?
+                                "Ошибка длина блока данных должен быть равна {0}" :
+                                "Error the length of the data block must be equal to = {0}", ActiveCmd[cmdNum].datalen));
+                        }
+                    }
+                }
+            }
+
+            if (uroven != "2" && ActiveCmd[cmdNum].mode == 2)
+            {
+                // После выполнения команды Администратором закрываем канал
+                // в следующей сессии канал откроется с заданным уровнем доступа
+                Request(requests.closeCnlReq, 4); // закрытие канала
+                if (lastCommSucc)
+                {
+                    prop.opencnl = false;
+                    CommonProps[address] = prop;
+                }
+            }
             CalcCmdStats(); // расчёт статистики
         }
 
-        private void Request(byte[] request, int Cnt)
+        private void Request(byte[] request, int Cnt, string descr = null)
         {
             int tryNum = 0;
-            if (CommSucc) // Заменить на обработчик ошибок, которые не связаны с ошибками CRC, timeout и т.д.
+            if (CommSucc) // обработчик ошибок, который не связан с ошибками CRC
             {
                 lastCommSucc = false;
                 while (RequestNeeded(ref tryNum))
                 {
+                    if (descr != null) WriteToLog(descr); // Если есть описание, выводим в лог
                     string logText;
                     WriteRequest(request, out logText);
                     WriteToLog(logText);
@@ -908,34 +1374,55 @@ namespace Scada.Comm.Devices
 
         private void checkCRC(int count)
         {
-            if (read_cnt > 0)
+            if (read_cnt == count)
             {
                 ushort crc = CrcFunc.CalcCRC16(inBuf, count);
                 if (crc == 0)
                 {
-                    WriteToLog(CommPhrases.ResponseOK);
-                    lastCommSucc = true;
+                    if (count == 4 && inBuf[1] != 0)
+                    {
+                        WriteToLog(string.Format(Localization.UseRussian ? "Ошибка: {0}" : "Error: {0}", ToLogString(inBuf[1])));
+                    }
+                    else
+                    {
+                        WriteToLog(CommPhrases.ResponseOK);
+                        lastCommSucc = true;
+                    }
                 }
                 else WriteToLog(CommPhrases.ResponseCrcError);
             }
-            else WriteToLog(CommPhrases.ResponseError);
+            else if (read_cnt == 4 && read_cnt != count)
+            {
+                ushort crc = CrcFunc.CalcCRC16(inBuf, 4);
+                if (crc == 0)
+                {
+                    WriteToLog(string.Format(Localization.UseRussian ? "Ошибка: {0}" : "Error: {0}", ToLogString(inBuf[1])));
+                }
+                else WriteToLog(CommPhrases.ResponseCrcError);
+            }
+            else
+            {
+                WriteToLog(CommPhrases.ResponseError);
+                CommSucc = false; // TEST при отсутствии ответа дальше не запрашивать
+            }
         }
 
         private class Requests
         {
             public byte[] testCnlReq;   // запрос тестирования канала
-
             public byte[] openCnlReq;   // запрос на открытие канала
-
+            public byte[] openAdmReq;   // Запрос открытия канала с Административным паролем
+            public byte[] closeCnlReq;  // Запрос на закрытие канала
+            public byte[] readTimeReq;  // Запрос чтения времени
+            public byte[] lastSyncReq;  // Запрос времени последней синхронизации
             public byte[] fixDataReq;   // запрос на фиксацию данных
-
             public byte[] dataReq;      // запрос чтения данных
-
             public byte[] energyPReq;   // запрос на чтение пофазной энергии А+ (0x05 0x60 тариф)
-
             public byte[] kuiReq;       // запрос значений трансформации тока и напряжения
-
             public byte[] infoReq;      // Запрос информации счетчика в ускоренном режиме (0x08 0x01) - 16 байт
+            public byte[] readRomReq;   // Запрос на чтение информации по физическим адресам памяти (0x06)
+            public byte[] curTimeReq;   // Зпапрос текущего времени 2.1 Запросы на чтение массивов времен (код 0x04 параметр 0x00)
+            public byte[] wordStatReq;  // Запрос словосостояния счетчика
 
             public Requests()
             {
@@ -948,7 +1435,26 @@ namespace Scada.Comm.Devices
             {
                 Allname = string.Concat(devTemplate.SndGroups[idgr].Name, " ", devTemplate.SndGroups[idgr].value[i].name);
                 taggroup.KPTags.Add(new KPTag(devTemplate.SndGroups[idgr].value[i].signal, Allname));
+
+                // Добавляем множитель в список тегов, индекс списка множителя равен индексу списка тегов
+                ValPar.Add(new ValParam
+                {
+                    range = string.IsNullOrEmpty(devTemplate.SndGroups[idgr].value[i].range) ? 1 : SToDouble(devTemplate.SndGroups[idgr].value[i].range)
+                });
             }
+        }
+
+        private double SToDouble(string s)
+        {
+            double result = 1;
+            if (!double.TryParse(s, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.GetCultureInfo("ru-RU"), out result))
+            {
+                if (!double.TryParse(s, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.GetCultureInfo("en-US"), out result))
+                {
+                    return 1;
+                }
+            }
+            return result;
         }
     }
 }
