@@ -17,7 +17,8 @@ namespace Scada.Comm.Devices.KpMercury23x
         private int kpNum;                   // номер КП
         private KPView.KPProperties kpProps; // свойства КП, сохраняемые SCADA-Коммуникатором
         private AppDirs appDirs;             // директории приложения
-        private string kpNum_pass; 
+        private string kpNum_pass;
+        private string kpNum_passA;
 
         // Конструктор, ограничивающий создание формы без параметров
         private FormSetting()
@@ -57,6 +58,13 @@ namespace Scada.Comm.Devices.KpMercury23x
                 {
                     kpProps.CustomParams[kpNum_pass] = textPass.Text;
                 }
+
+                if (textPassA.Text != "")
+                {
+                    kpProps.CustomParams[kpNum_passA] = textPassA.Text;
+                }
+
+
             }
             DialogResult = DialogResult.OK;
         }
@@ -68,17 +76,22 @@ namespace Scada.Comm.Devices.KpMercury23x
             // установка элементов управления в соответствии со свойствами КП
             LineCmdText.Text = kpProps.CmdLine;
             kpNum_pass = string.Concat(kpNum.ToString(), "_pass");
+            kpNum_passA = string.Concat(kpNum.ToString(), "_passA");
 
             if (kpProps.CustomParams.ContainsKey(kpNum_pass)) // Если есть параметр, читаем его значение
             {
                 textPass.Text = kpProps.CustomParams.GetStringParam(kpNum_pass, false, "");
             }
 
+            if (kpProps.CustomParams.ContainsKey(kpNum_passA)) // Если есть параметр, читаем его значение
+            {
+                textPassA.Text = kpProps.CustomParams.GetStringParam(kpNum_passA, false, "");
+            }
+
             // вывод заголовка
             Text = string.Format(Text, "КП " + kpNum);
 
             kpProps.Modified = false;
-
 
             // настройка элементов управления
             openFileDialog.InitialDirectory = appDirs.ConfigDir;
@@ -99,5 +112,4 @@ namespace Scada.Comm.Devices.KpMercury23x
             DialogResult = DialogResult.Cancel;
         }
     }
-    
  }
