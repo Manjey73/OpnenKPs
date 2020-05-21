@@ -1,14 +1,9 @@
 using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
 using ScadaCommFunc;
-using Scada.Comm.Devices.KpMercury23x;
 
 namespace Scada.Comm.Devices
 {
-
     internal static class Protocol
     {
         public static ushort res;  //резервирование ответа контрольной суммы
@@ -83,7 +78,7 @@ namespace Scada.Comm.Devices
             if (Param == "14h")
             {
                 data[2] = 0x14;
-                data[3] = (byte)bwri;                    //параметр фиксации данных
+                data[3] = (byte)bwri;                    //параметр зафиксированных данных
             }
             else
             {
@@ -111,7 +106,7 @@ namespace Scada.Comm.Devices
             energy[0] = (byte)devAddr;
             energy[1] = 0x05;                                   // 2.2 Запросы на чтение массивов регистров накопленной энергии
             energy[2] = 0x60;                                   // Параметр чтения накопленной энергии A+ от сброса по фазам
-            energy[3] = (byte)tarif;                            // Параметр чтения накопленной энергии A+ от сброса по фазам
+            energy[3] = (byte)tarif;                            // Номер тарифа
             res = CrcFunc.CalcCRC16(energy, 4);                 //получить контрольную сумму
             energy[energy.Length - 2] = (byte)(res % 256);      //Добавить контрольную сумму к буферу посылки
             energy[energy.Length - 1] = (byte)(res / 256);
@@ -130,5 +125,91 @@ namespace Scada.Comm.Devices
             return info;
         }
 
+        public static byte[] ReadRomReq(int devAddr, int energy, int numRom, int startAddr, int Quantity)
+        {
+            byte NumRom = 0;
+            byte Energy = 0; 
+            byte[] readrom = new byte[8];
+            if (numRom == 3)
+            {
+                Energy = (byte)((energy & 0x07) << 4);
+                NumRom = startAddr > 0xffff ? (byte)((numRom & 0x0f) | 0x80) : (byte)(numRom & 0x0f);
+            }
+            else
+            {
+                Energy = 0x00;
+            }
+            readrom[0] = (byte)devAddr;
+            readrom[1] = 0x06;                                  // 2.4 Ускоренный режим чтения по физическим адресам памяти
+
+            readrom[2] = (byte)(NumRom | Energy);               // Вид энергии, номер памяти
+            readrom[3] = (byte)(startAddr / 256);               // Старший байт адреса                            TEST
+            readrom[4] = (byte)(startAddr % 256);               // Младший байт адреса                            TEST
+            readrom[5] = (byte)Quantity;                        // количество байт                                TEST
+            res = CrcFunc.CalcCRC16(readrom, 6);                //получить контрольную сумму
+            readrom[readrom.Length - 2] = (byte)(res % 256);    //Добавить контрольную сумму к буферу посылки
+            readrom[readrom.Length - 1] = (byte)(res / 256);
+            return readrom;
+        }
+
+        public static byte[] CurTimeReq(int devAddr)
+        {
+            byte[] curtime = new byte[5];
+            curtime[0] = (byte)devAddr;
+            curtime[1] = 0x04;                                  // 2.1 Запросы на чтение массивов времен (код 0x04)
+            curtime[2] = 0x00;                                  // Запрос на чтение текущего времени (параметр 0x00)
+            res = CrcFunc.CalcCRC16(curtime, 3);                //получить контрольную сумму
+            curtime[curtime.Length - 2] = (byte)(res % 256);    //Добавить контрольную сумму к буферу посылки
+            curtime[curtime.Length - 1] = (byte)(res / 256);
+            return curtime;
+        }
+
+        /// <summary>
+        /// Отправка команды без параметров
+        /// </summary>
+        /// <param name="devAddr"></param>
+        /// <param name="Com"></param>
+        /// <param name="Data"></param>
+        /// <returns></returns>
+        public static byte[] WriteComReq(int devAddr, int Com, byte[] Data = null)
+        {
+            int cnt = 2;
+            if (Data != null)
+                cnt = 2 + Data.Length;
+            byte[] com = new byte[cnt+2];
+            com[0] = (byte)devAddr;
+            com[1] = (byte)Com;                             // Отправка команды без параметров
+            if (Data != null)
+                Array.Copy(Data, 0, com, 2, Data.Length);   // Копируем блок данных при его наличии
+            res = CrcFunc.CalcCRC16(com, cnt);              // получить контрольную сумму
+            com[com.Length - 2] = (byte)(res % 256);        // добавить контрольную сумму к буферу посылки
+            com[com.Length - 1] = (byte)(res / 256);
+            return com;
+        }
+
+        /// <summary>
+        /// Отправка команды с параметрами
+        /// </summary>
+        /// <param name="devAddr"></param>
+        /// <param name="Com"></param>
+        /// <param name="Par"></param>
+        /// <param name="Data"></param>
+        /// <returns></returns>
+        public static byte[] WriteCompReq(int devAddr, int Com, int Par, byte[] Data = null) //, bool dataYes = false
+        {
+            int cnt = 3;
+            if (Data != null)
+                cnt = 3 + Data.Length;
+            byte[] comp = new byte[cnt+2];
+            comp[0] = (byte)devAddr;
+            comp[1] = (byte)Com;                            // Отправка команды c параметром
+            comp[2] = (byte)Par;                            // Отправка команды c параметром
+            if (Data != null)
+                Array.Copy(Data, 0, comp, 3, Data.Length);  // Копируем блок данных при его наличии
+            res = CrcFunc.CalcCRC16(comp, cnt);             // получить контрольную сумму
+            comp[comp.Length - 2] = (byte)(res % 256);      // добавить контрольную сумму к буферу посылки
+            comp[comp.Length - 1] = (byte)(res / 256);
+            return comp;
+        }
     }
 }
