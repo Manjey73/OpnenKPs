@@ -153,7 +153,7 @@ namespace Scada.Comm.Devices
 
         public static string ToLogString(byte errcode)
         {
-            string logs = "Неизвестная ошибка";
+            string logs = "";
             switch (errcode)
             {
                 case 0x00: logs = "Связь восстановлена"; break;
@@ -162,6 +162,7 @@ namespace Scada.Comm.Devices
                 case 0x03: logs = "Недостаточен уровень доступа"; break;
                 case 0x04: logs = "Внутренние часы корректировались"; break;
                 case 0x05: logs = "Не открыт канал связи"; break;
+                case 0x09: logs = "Потеря связи"; break; // Добавленный код 9 для потери связи
             }
             return logs;
         }
@@ -792,7 +793,7 @@ namespace Scada.Comm.Devices
 
             MyDevice prop = (MyDevice)CommonProps[address];
 
-            // код работает один раз
+            // код работает один раз при запуске линии
             if (devTemplate.multicast && !prop.firstFix)
             {
                 // Если параметр firstFix = true, то первый КП на линии посылает команду фиксации данных по широковещательному
@@ -814,10 +815,11 @@ namespace Scada.Comm.Devices
                 if (lastCommSucc)
                 {
                     prop.testcnl = true;
-                    code = inBuf[1];
+                    //code = inBuf[1];
                 }
                 else
                 {
+                    // Если тест канала не прошел, больше не опрашиваем
                     CommSucc = false;
                 }
             }
@@ -1005,9 +1007,10 @@ namespace Scada.Comm.Devices
                     else // используем команду фиксации по адресу счетчика
                     {
                         Request(requests.fixDataReq, 4);
-                        if (lastCommSucc && prop.opencnl)
+                        if (lastCommSucc)
                         {
-                            code = inBuf[1];
+                            // Если работа без широковещательной команды, переводим команду фиксации в true
+                            //prop.firstFix = true;
                         }
                     }
                 }
@@ -1021,7 +1024,7 @@ namespace Scada.Comm.Devices
 
                     Request(requests.dataReq, nb_length[f]);
 
-                    if (lastCommSucc && prop.opencnl)
+                    if (lastCommSucc)
                     {
                         for (int zn = 0; zn < nparc[f]; zn++)
                         {
@@ -1088,7 +1091,7 @@ namespace Scada.Comm.Devices
                     Request(requests.energyPReq, 15);
 
                     // Тут проверка ответа на корректность и разбор значений
-                    if (lastCommSucc && prop.opencnl)
+                    if (lastCommSucc)
                     {
                         int znx = 1;
                         for (int zn = 0; zn < 3; zn++)
@@ -1191,16 +1194,16 @@ namespace Scada.Comm.Devices
             }
 
             // У статуса и коэффициентов фиксированные номера сигналов
-            if (readstatus)
+            // Статус передаем всегда на случай потери связи
+            // при потери связи переменная открытия канала сбрасывается
+            // Чтение последней записи журнала кода состояния прибора
+            if (readstatus) SetCurData(myTags[70].Index, code, 1);
+
+            if (readstatus && prop.opencnl)
             {
-                SetCurData(myTags[70].Index, code, 1);
                 SetCurData(myTags[71].Index, prop.ki, 1);
                 SetCurData(myTags[72].Index, prop.ku, 1);
-            }
 
-            // Чтение последней записи журнала кода состояния прибора
-            if (prop.opencnl && readstatus)
-            {
                 Request(requests.wordStatReq, 16);
                 if (lastCommSucc)
                 {
@@ -1374,36 +1377,39 @@ namespace Scada.Comm.Devices
 
         private void checkCRC(int count)
         {
-            if (read_cnt == count)
+            if (read_cnt >= 4)
             {
-                ushort crc = CrcFunc.CalcCRC16(inBuf, count);
+                ushort crc = CrcFunc.CalcCRC16(inBuf, read_cnt);
                 if (crc == 0)
                 {
-                    if (count == 4 && inBuf[1] != 0)
+                    if (read_cnt > 4)
                     {
-                        WriteToLog(string.Format(Localization.UseRussian ? "Ошибка: {0}" : "Error: {0}", ToLogString(inBuf[1])));
-                    }
-                    else
-                    {
+                        code = 0x00;
                         WriteToLog(CommPhrases.ResponseOK);
-                        lastCommSucc = true;
                     }
-                }
-                else WriteToLog(CommPhrases.ResponseCrcError);
-            }
-            else if (read_cnt == 4 && read_cnt != count)
-            {
-                ushort crc = CrcFunc.CalcCRC16(inBuf, 4);
-                if (crc == 0)
-                {
-                    WriteToLog(string.Format(Localization.UseRussian ? "Ошибка: {0}" : "Error: {0}", ToLogString(inBuf[1])));
+                    else if (read_cnt == 4)
+                    {
+                        if (read_cnt == count && inBuf[1] != 0x00)
+                        {
+                            code = inBuf[1];
+                            WriteToLog(string.Format(Localization.UseRussian ? "Ошибка: {0}" : "Error: {0}", ToLogString(inBuf[1])));
+                        }
+                        else
+                        {
+                            code = inBuf[1];
+                            WriteToLog(CommPhrases.ResponseOK);
+                        }
+                    }
+                    lastCommSucc = true;
                 }
                 else WriteToLog(CommPhrases.ResponseCrcError);
             }
             else
             {
+                code = 0x09;
                 WriteToLog(CommPhrases.ResponseError);
-                CommSucc = false; // TEST при отсутствии ответа дальше не запрашивать
+                CommSucc = false; // при отсутствии ответа дальше не запрашивать
+                InvalidateCurData();
             }
         }
 
