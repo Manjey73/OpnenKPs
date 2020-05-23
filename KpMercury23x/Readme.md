@@ -46,10 +46,10 @@ https://github.com/Manjey73/OpnenKPs/releases/download/KpMercury23x/KpMercury23x
 
               Мгновенные значения:
 
-                bit 0 - Мощность P ?, L1, L2, L3
-                bit 1 - Мощность Q ?, L1, L2, L3
-                bit 2 - Мощность S ?, L1, L2, L3
-                bit 3 - Cos f ?, L1, L2, L3
+                bit 0 - Мощность P Sum, L1, L2, L3
+                bit 1 - Мощность Q Sum, L1, L2, L3
+                bit 2 - Мощность S Sum, L1, L2, L3
+                bit 3 - Cos f Sum, L1, L2, L3
                 bit 4 - Напряжение L1, L2, L3
                 bit 5 - Ток L1, L2, L3
                 bit 6 - Угол м-ду ф. L1-L2, L1-L3, L2-L3
@@ -57,12 +57,12 @@ https://github.com/Manjey73/OpnenKPs/releases/download/KpMercury23x/KpMercury23x
 
                     Энергия от сброса:
 
-                bit 8  - Энергия ? А+, А-, R+, R-
+                bit 8  - Энергия Sum А+, А-, R+, R-
                 bit 9  - Тариф 1   А+, А-, R+, R-
                 bit 10 - Тариф 2   А+, А-, R+, R-
                 bit 11 - Тариф 3   А+, А-, R+, R-
                 bit 12 - Тариф 4   А+, А-, R+, R-
-                bit 13 - Энергия ? А+ L1, L2, L3
+                bit 13 - Энергия А+ Sum L1, L2, L3
                 bit 14 - Тариф 1   А+ L1, L2, L3
                 bit 15 - Тариф 2   А+ L1, L2, L3
                 bit 16 - Тариф 3   А+ L1, L2, L3
