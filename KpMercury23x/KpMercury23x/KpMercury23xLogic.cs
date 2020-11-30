@@ -1184,6 +1184,11 @@ namespace Scada.Comm.Devices
                                 tme = tme + saveTime;
                             }
                             while (tme < second);
+                            
+                            //Сохранить время последнего считанного архива в список сохраняемых параметров
+                            prop.saveParam.arcDt = prop.srezDt.ToString(); // TEST
+                            SaveSettings();
+                            
                         }
                     }
                     else
