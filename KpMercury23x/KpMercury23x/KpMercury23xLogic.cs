@@ -26,6 +26,7 @@
 using Scada.Comm.Channels;
 using Scada.Data.Models;
 using System;
+using System.IO;
 using System.Collections.Generic;
 using System.Linq;
 using Scada.Data.Tables;
@@ -35,12 +36,13 @@ using Scada.Data.Configuration;
 using System.Text;
 using System.Reflection;
 
-
 namespace Scada.Comm.Devices
 {
     public class KpMercury23xLogic : KPLogic
     {
         private DevTemplate devTemplate = new DevTemplate();
+
+        //private SaveParam saveParam = new SaveParam();
 
         private int read_cnt = 0;
         private string fileName = "";
@@ -50,6 +52,14 @@ namespace Scada.Comm.Devices
         private string Allname;         // Полное имя тега
         private bool CommSucc = true;
         private byte[] inBuf;
+
+        // TEST TEST TEST
+        private bool settLoaded;   // загрузка настроек выполнена
+        private DateTime hrBegDT;  // дата и час начала часовых архивов
+        private DateTime dayBegDT; // дата и час начала суточных архивов
+        private DateTime hrReqDT;  // дата и час запроса часовых архивов
+        private DateTime dayReqDT; // дата запроса суточных архивов
+        // TEST TEST TEST
 
         private Requests requests;
 
@@ -91,6 +101,32 @@ namespace Scada.Comm.Devices
             return pass;
         }
 
+        // Пример создания пользовательского параметра, привязанного к КП
+        // Вызоа в секциях OnAddedToCommLine и OnCommLineStart GetMyProps("name")
+        // Имя по аналогии с kpLastDt, сформировано по номеру КП и имени параметра
+        // Если имя будет без номера КП, переменная будет общей для всех КП на линии
+        // Переменная имеет только формат string
+        // --------------------------------------------------------------
+        //protected virtual string kpLastDt
+        //{
+        //    get { return Number.ToString() + "_lastDt"; }
+        //}
+        //private string GetMyProps(string myProps)
+        //{
+        //    string myValue = CustomParams.ContainsKey(myProps) ?
+        //        CustomParams[myProps] as string : null;
+        //    if (myValue == null)
+        //    {
+        //        if (!CustomParams.ContainsKey(myProps))
+        //        {
+        //            CustomParams.Add(myProps, myValue);
+        //        }
+        //    }
+        //    return myValue;
+        //}
+        // --------------------------------------------------------------
+        // Пример создания пользовательского параметра, привязанного к КП
+
         public static long Ticks() // возвращает время в миллисекундах
         {
             DateTime now = DateTime.Now;
@@ -100,6 +136,7 @@ namespace Scada.Comm.Devices
 
         public class MyDevice                   // переменные для устройств на линии связи
         {
+            public SaveParam saveParam = new SaveParam();
             public bool testcnl = false;        // фиксация команды тестирования канала
             public bool opencnl = false;        // фиксация команды авторизации и открытия канала
             public bool Kui = false;            // фиксация команды чтения коэффициентов трансформации
@@ -121,7 +158,7 @@ namespace Scada.Comm.Devices
 
             public override string ToString()
             {
-                string outprops = string.Concat("SN_", serial.ToString(), " Изготовлен ", made.ToString("dd.MM.yyyy"));
+                string outprops = string.Concat("SN_", serial.ToString(), " Изготовлен ", made.ToString("dd.MM.yyyy"), " Время архива ", srezDt.ToString());
                 return outprops;
             }
 
@@ -337,7 +374,6 @@ namespace Scada.Comm.Devices
         private Dictionary<int, SetCommand> ActiveCmd = new Dictionary<int, SetCommand>(); // Ключ = номер команды (сигнала) - Значение = Индекс Команды в списке активных команд
 
         private Dictionary<int, KPTag> myTags = new Dictionary<int, KPTag>();
-
 
         public override void OnAddedToCommLine()
         {
@@ -754,6 +790,29 @@ namespace Scada.Comm.Devices
         {
             GetMyDevice();
             InitRequests();
+            MyDevice prop = (MyDevice)CommonProps[address];
+
+            // Чтение параметров счетчика из файла по переменной readinfo
+            if (!prop.readInfo)
+            {
+                hrReqDT = DateTime.MinValue;
+
+                LoadSettings();
+
+                if (settLoaded)
+                {
+                    bool t1 = DateTime.TryParse(prop.saveParam.madeDt, out prop.made);
+                    bool t2 = int.TryParse(prop.saveParam.serial, out prop.serial);
+                    bool t3 = int.TryParse(prop.saveParam.constA, out prop.Aconst);
+
+                    // Если все переменные считаны и корректны то запрос чтения параметров выполняться не будет
+                    prop.readInfo = (t1 && t2 && t3) ;
+
+                    bool t4 = true;
+                    if (saveTime == 0) t4 = DateTime.TryParse(prop.saveParam.arcDt, out prop.srezDt); // TEST
+
+                }
+            }
         }
 
         /// <summary>
@@ -791,6 +850,7 @@ namespace Scada.Comm.Devices
                 return;
             }
 
+            CommSucc = true;
             MyDevice prop = (MyDevice)CommonProps[address];
 
             // код работает один раз при запуске линии
@@ -805,8 +865,6 @@ namespace Scada.Comm.Devices
                     Val.firstFix = true;
                 }
             }
-
-            CommSucc = true;
 
             if (!prop.testcnl)
             {
@@ -943,6 +1001,12 @@ namespace Scada.Comm.Devices
                     prop.serial = snNum;                                           // Сохраняем серийный номер
                     prop.made = new DateTime(2000 + inBuf[7], inBuf[6], inBuf[5]); // Сохраняем дату изготовления
                     prop.Aconst = ConstA(inBuf[12]);                               // Сохраняем постоянну счетчика имп/квт*ч
+
+                    prop.saveParam.serial = snNum.ToString();
+                    prop.saveParam.madeDt = prop.made.ToString("dd.MM.yyyy");
+                    prop.saveParam.constA = prop.Aconst.ToString();
+
+                    SaveSettings();
                 }
                 else
                 {
@@ -1112,8 +1176,9 @@ namespace Scada.Comm.Devices
                 }
             }
 
+
             // Чтение профилей мощностей - Вид энергии 0 (A+, A-, R+, R-)
-            if (LastSessDT.Subtract(prop.srezDt) > TimeSpan.FromMinutes(srezPeriod)) // TotalMinuts - 30 заменить на полученное из счетчика
+            if (LastSessDT > DateTime.MinValue && LastSessDT.Subtract(prop.srezDt) > TimeSpan.FromMinutes(srezPeriod)) // TotalMinuts - 30 заменить на полученное из счетчика
             {
                 if (profile.Count > 0)
                 {
@@ -1154,7 +1219,7 @@ namespace Scada.Comm.Devices
                         // параметром шаблона halfArchStat, необходимо предварительно создать Номер и цвет в Проект - Справочники - Типы каналов 
                         bool halfSrez = (inBuf[1] & 0x02) > 0;
 
-                        if (LastSessDT.Subtract(prop.srezDt) > TimeSpan.FromMinutes(0))
+                        if (LastSessDT > DateTime.MinValue && LastSessDT.Subtract(prop.srezDt) > TimeSpan.FromMinutes(0))
                         {
                             double second = saveTime != 0 ? LastSessDT.Subtract(prop.srezDt).TotalSeconds : 0;
                             DateTime writeDt = dt;
@@ -1184,11 +1249,14 @@ namespace Scada.Comm.Devices
                                 tme = tme + saveTime;
                             }
                             while (tme < second);
-                            
+
                             //Сохранить время последнего считанного архива в список сохраняемых параметров
                             prop.saveParam.arcDt = prop.srezDt.ToString(); // TEST
                             SaveSettings();
-                            
+
+                            // TEST
+                            //WriteToLog("От архивного  "  + prop.saveParam.serial + "  " + prop.saveParam.madeDt + "  " + prop.saveParam.constA + "  " + prop.saveParam.arcDt);
+
                         }
                     }
                     else
@@ -1197,6 +1265,7 @@ namespace Scada.Comm.Devices
                     }
                 }
             }
+
 
             // У статуса и коэффициентов фиксированные номера сигналов
             // Статус передаем всегда на случай потери связи
@@ -1406,6 +1475,7 @@ namespace Scada.Comm.Devices
                         }
                     }
                     lastCommSucc = true;
+                    CommSucc = true; // TEST
                 }
                 else WriteToLog(CommPhrases.ResponseCrcError);
             }
@@ -1467,6 +1537,63 @@ namespace Scada.Comm.Devices
             }
             return result;
         }
+
+        /// <summary>
+        /// Загрузить из файла даты последнего архива и время запроса архивов
+        /// </summary>
+        private void LoadSettings()
+        {
+            MyDevice prop = (MyDevice)CommonProps[address];
+            // CommLineSvc.Number - Номер линии связи, Number - Номер КП, Address - Адрес прибора
+            string fname = AppDirs.StorageDir + "Mercury23x_L" + CommUtils.AddZeros(CommLineSvc.Number, 3) + "_A" + CommUtils.AddZeros(Address, 3) + ".xml";
+            try
+            {
+                prop.saveParam = FileFunc.LoadXml(typeof(SaveParam), fname) as SaveParam;
+                //CheckLoad();
+                if (prop.saveParam != null) settLoaded = true;
+            }
+            catch (Exception err)
+            {
+                WriteToLog(string.Format(Localization.UseRussian ?
+                "Не найден файл настроек: " + err.Message :
+                "No settings file found: " + err.Message));
+            }
+
+            //settLoaded = true;
+        }
+
+        /// <summary>
+        /// Выполнить действия при завершении работы линии связи
+        /// </summary>
+        public override void OnCommLineTerminate()
+        {
+            // если все срезы переданы и загрузка настроек выполнена, сохранить время запроса архивов в файле
+            //if (arcSrezList.Count == 0 && settLoaded)
+            if (profile.Count > 0)
+                SaveSettings();
+        }
+
+        /// <summary>
+        /// Сохранить в файле время запроса последнего архивов
+        /// </summary>
+        private void SaveSettings()
+        {
+            MyDevice prop = (MyDevice)CommonProps[address];
+            // CommLineSvc.Number - Номер линии связи, Number - Номер КП, Address - Адрес прибора
+            string fname = AppDirs.StorageDir + "Mercury23x_L" + CommUtils.AddZeros(CommLineSvc.Number, 3) + "_A" + CommUtils.AddZeros(Address, 3) + ".xml"; 
+            try
+            {
+                FileFunc.SaveXml(prop.saveParam, fname);
+            }
+            catch (Exception err)
+            {
+                WriteToLog(string.Format(Localization.UseRussian ?
+                "Ошибка при сохранении настроек в файле: " + err.Message :
+                "Error when saving settings in a file: " + err.Message));
+            }
+        }
+
+
     }
 }
 
