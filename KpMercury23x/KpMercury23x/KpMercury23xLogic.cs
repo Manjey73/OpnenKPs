@@ -1176,14 +1176,13 @@ namespace Scada.Comm.Devices
                 }
             }
 
-
             // Чтение профилей мощностей - Вид энергии 0 (A+, A-, R+, R-)
-            if (LastSessDT > DateTime.MinValue && LastSessDT.Subtract(prop.srezDt) > TimeSpan.FromMinutes(srezPeriod)) // TotalMinuts - 30 заменить на полученное из счетчика
+            DateTime dt = DateTime.Now;
+            if (dt.Subtract(prop.srezDt) > TimeSpan.FromMinutes(srezPeriod)) // TotalMinuts - 30 заменить на полученное из счетчика
             {
                 if (profile.Count > 0)
                 {
                     Request(Protocol.WriteCompReq(Address, 0x08, 0x13), 12); // Чтение последней записи среза мощностей
-                    DateTime dt = DateTime.Now;
 
                     int ramstart = 0;
                     if (lastCommSucc)
@@ -1219,9 +1218,9 @@ namespace Scada.Comm.Devices
                         // параметром шаблона halfArchStat, необходимо предварительно создать Номер и цвет в Проект - Справочники - Типы каналов 
                         bool halfSrez = (inBuf[1] & 0x02) > 0;
 
-                        if (LastSessDT > DateTime.MinValue && LastSessDT.Subtract(prop.srezDt) > TimeSpan.FromMinutes(0))
+                        if (nowDt.Subtract(prop.srezDt) > TimeSpan.FromMinutes(0))
                         {
-                            double second = saveTime != 0 ? LastSessDT.Subtract(prop.srezDt).TotalSeconds : 0;
+                            double second = saveTime != 0 ? nowDt.Subtract(prop.srezDt).TotalSeconds : 0;
                             DateTime writeDt = dt;
 
                             double tme = 0;
