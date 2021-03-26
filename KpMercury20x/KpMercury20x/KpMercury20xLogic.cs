@@ -182,9 +182,9 @@ namespace Scada.Comm.Devices
                 {
                     byte[] znactmp = new byte[3];
                     Array.Copy(buf_in, 5, znactmp, 0, 2);
-                    SetCurData(tag, Convert.ToDouble(BcdToDec(znactmp)) / 1000, 1); tag++;
+                    SetCurData(tag, Convert.ToDouble(BcdToDec(znactmp)) / 10, 1); tag++;
                     Array.Copy(buf_in, 7, znactmp, 0, 2);
-                    SetCurData(tag, Convert.ToDouble(BcdToDec(znactmp)) / 10000, 1); tag++;
+                    SetCurData(tag, Convert.ToDouble(BcdToDec(znactmp)) / 100, 1); tag++;
                     Array.Copy(buf_in, 9, znactmp, 0, 3);
                     SetCurData(tag, Convert.ToDouble(BcdToDec(znactmp)), 1); tag++;
                     if (slog) ExecWriteToLog("OK!");
@@ -257,7 +257,7 @@ namespace Scada.Comm.Devices
                     Array.Copy(buf_in, 8, znactmp, 0, 3);
                     SetCurData(tag, Convert.ToDouble(BcdToDec(znactmp)), 1); tag++; // Мощность полная
                     Array.Copy(buf_in, 6, znactmp, 0, 2);
-                    SetCurData(tag, Convert.ToDouble(BcdToDec(znactmp)) / 100000, 1); tag++; //косинус фи
+                    SetCurData(tag, Convert.ToDouble(BcdToDec(znactmp)) / 1000, 1); tag++; //косинус фи
                     if (slog) ExecWriteToLog("OK!");
                     lastCommSucc = true;
                 }
