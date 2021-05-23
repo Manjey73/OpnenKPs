@@ -19,7 +19,7 @@
  * 
  * Author   : Andrey Burakhin
  * Created  : 2017
- * Modified : 2020
+ * Modified : 2021
  */
 
 
@@ -42,8 +42,6 @@ namespace Scada.Comm.Devices
     {
         private DevTemplate devTemplate = new DevTemplate();
 
-        //private SaveParam saveParam = new SaveParam();
-
         private int read_cnt = 0;
         private string fileName = "";
         private string filePath = "";
@@ -52,6 +50,8 @@ namespace Scada.Comm.Devices
         private string Allname;         // Полное имя тега
         private bool CommSucc = true;
         private byte[] inBuf;
+        private bool ActiveProfile = false;
+        private bool firstAProfile = true;
 
         // TEST TEST TEST
         private bool settLoaded;   // загрузка настроек выполнена
@@ -100,32 +100,6 @@ namespace Scada.Comm.Devices
             string pass = String.IsNullOrEmpty(CustomParams.GetStringParam(kpNum_passA, false, "")) ? passwordA : CustomParams.GetStringParam(kpNum_passA, false, "");
             return pass;
         }
-
-        // Пример создания пользовательского параметра, привязанного к КП
-        // Вызоа в секциях OnAddedToCommLine и OnCommLineStart GetMyProps("name")
-        // Имя по аналогии с kpLastDt, сформировано по номеру КП и имени параметра
-        // Если имя будет без номера КП, переменная будет общей для всех КП на линии
-        // Переменная имеет только формат string
-        // --------------------------------------------------------------
-        //protected virtual string kpLastDt
-        //{
-        //    get { return Number.ToString() + "_lastDt"; }
-        //}
-        //private string GetMyProps(string myProps)
-        //{
-        //    string myValue = CustomParams.ContainsKey(myProps) ?
-        //        CustomParams[myProps] as string : null;
-        //    if (myValue == null)
-        //    {
-        //        if (!CustomParams.ContainsKey(myProps))
-        //        {
-        //            CustomParams.Add(myProps, myValue);
-        //        }
-        //    }
-        //    return myValue;
-        //}
-        // --------------------------------------------------------------
-        // Пример создания пользовательского параметра, привязанного к КП
 
         public static long Ticks() // возвращает время в миллисекундах
         {
@@ -450,6 +424,7 @@ namespace Scada.Comm.Devices
                                     });
                                 }
                             }
+                            ActiveProfile = true;
                         }
                     }
                 }
@@ -806,11 +781,10 @@ namespace Scada.Comm.Devices
                     bool t3 = int.TryParse(prop.saveParam.constA, out prop.Aconst);
 
                     // Если все переменные считаны и корректны то запрос чтения параметров выполняться не будет
-                    prop.readInfo = (t1 && t2 && t3) ;
+                    prop.readInfo = t1 && t2 && t3;
 
-                    bool t4 = true;
-                    if (saveTime == 0) t4 = DateTime.TryParse(prop.saveParam.arcDt, out prop.srezDt); // TEST
-
+                    bool t4 = DateTime.TryParse(prop.saveParam.arcDt, out prop.srezDt); // TEST if (saveTime == 0)
+                    //if (t4) WriteToLog(Convert.ToString(prop.srezDt)); // TEST
                 }
             }
         }
@@ -878,7 +852,9 @@ namespace Scada.Comm.Devices
                 else
                 {
                     // Если тест канала не прошел, больше не опрашиваем
-                    CommSucc = false;
+                    //CommSucc = false;
+                    InvalidateCurData();
+                    return;
                 }
             }
 
@@ -1177,94 +1153,96 @@ namespace Scada.Comm.Devices
             }
 
             // Чтение профилей мощностей - Вид энергии 0 (A+, A-, R+, R-)
-            DateTime dt = DateTime.Now;
-            if (dt.Subtract(prop.srezDt) > TimeSpan.FromMinutes(srezPeriod)) // TotalMinuts - 30 заменить на полученное из счетчика
+            if (ActiveProfile)
             {
-                if (profile.Count > 0)
+
+                DateTime dt = DateTime.Now;
+                if (dt.Subtract(prop.srezDt) > TimeSpan.FromMinutes(srezPeriod) || firstAProfile) // TotalMinuts - 30 заменить на полученное из счетчика
                 {
-                    Request(Protocol.WriteCompReq(Address, 0x08, 0x13), 12); // Чтение последней записи среза мощностей
-
-                    int ramstart = 0;
-                    if (lastCommSucc)
+                    if (profile.Count > 0)
                     {
-                        // -------Определить дату последней записи профиля средних мощностей ---------
-                        dt = new DateTime(2000 + (int)ConvFunc.BcdToDec(new byte[] { inBuf[8] }), (int)ConvFunc.BcdToDec(new byte[] { inBuf[7] }), (int)ConvFunc.BcdToDec(new byte[] { inBuf[6] }), (int)ConvFunc.BcdToDec(new byte[] { inBuf[4] }), (int)ConvFunc.BcdToDec(new byte[] { inBuf[5] }), 0);
+                        Request(Protocol.WriteCompReq(Address, 0x08, 0x13), 12); // Чтение последней записи среза мощностей
 
-                        srezPeriod = inBuf[9]; // Проверка периода среза и запись значения в переменную, по умолчанию 30 минут
-
-                        // Последняя ячейка памяти записи средней мощности
-                        byte[] NumCell = new byte[2];
-                        Array.Copy(inBuf, 1, NumCell, 0, 2);
-                        Array.Reverse(NumCell);
-                        // Адрес последней ячейки памяти
-                        ramstart = (BitConverter.ToUInt16(NumCell, 0) * 16);
-                    }
-                    else
-                    {
-                        if (inBuf[1] == 0x05) prop.opencnl = false;
-                    }
-
-                    // Пока только Вид энергии 0 (A+, A-, R+, R-)
-                    requests.readRomReq = Protocol.ReadRomReq(Address, 0, 3, ramstart, 15); // прочитать последнюю запись, 15 байт
-                    Request(requests.readRomReq, 18); // Чтение ROM
-
-                    if (lastCommSucc)
-                    {
-                        prop.srezDt = dt;
-                        DateTime nowDt = DateTime.Now;
-                        // Обработка профилей мощности
-                        int znx = 8;
-                        // Определение статуса среза средниих мощностей false = Архивный (Полный срез), true = Неполный срез, номер задается
-                        // параметром шаблона halfArchStat, необходимо предварительно создать Номер и цвет в Проект - Справочники - Типы каналов 
-                        bool halfSrez = (inBuf[1] & 0x02) > 0;
-
-                        if (nowDt.Subtract(prop.srezDt) > TimeSpan.FromMinutes(0))
+                        int ramstart = 0;
+                        if (lastCommSucc)
                         {
-                            double second = saveTime != 0 ? nowDt.Subtract(prop.srezDt).TotalSeconds : 0;
-                            DateTime writeDt = dt;
+                            // -------Определить дату последней записи профиля средних мощностей ---------
+                            dt = new DateTime(2000 + (int)ConvFunc.BcdToDec(new byte[] { inBuf[8] }), (int)ConvFunc.BcdToDec(new byte[] { inBuf[7] }), (int)ConvFunc.BcdToDec(new byte[] { inBuf[6] }), (int)ConvFunc.BcdToDec(new byte[] { inBuf[4] }), (int)ConvFunc.BcdToDec(new byte[] { inBuf[5] }), 0);
 
-                            double tme = 0;
-                            do
+                            srezPeriod = inBuf[9]; // Проверка периода среза и запись значения в переменную, по умолчанию 30 минут
+
+                            // Последняя ячейка памяти записи средней мощности
+                            byte[] NumCell = new byte[2];
+                            Array.Copy(inBuf, 1, NumCell, 0, 2);
+                            Array.Reverse(NumCell);
+                            // Адрес последней ячейки памяти
+                            ramstart = (BitConverter.ToUInt16(NumCell, 0) * 16);
+
+                            // Пока только Вид энергии 0 (A+, A-, R+, R-)
+                            requests.readRomReq = Protocol.ReadRomReq(Address, 0, 3, ramstart, 15); // прочитать последнюю запись, 15 байт
+                            Request(requests.readRomReq, 18); // Чтение ROM
+
+                            if (lastCommSucc)
                             {
-                                // Формируем новый архивный срез по количеству параметров прибора
-                                TagSrez srez = new TagSrez(profile.Count);
-                                srez.DateTime = writeDt.AddSeconds(tme);
 
-                                for (int pf = 0; pf < profile.Count; pf++)
+                                DateTime nowDt = DateTime.Now;
+                                // Обработка профилей мощности
+                                int znx = 8;
+                                // Определение статуса среза средниих мощностей false = Архивный (Полный срез), true = Неполный срез, номер задается
+                                // параметром шаблона halfArchStat, необходимо предварительно создать Номер и цвет в Проект - Справочники - Типы каналов 
+                                bool halfSrez = (inBuf[1] & 0x02) > 0;
+
+                                if (nowDt.Subtract(dt) > TimeSpan.FromMinutes(0) && (nowDt.Subtract(dt) < TimeSpan.FromMinutes(srezPeriod))) // nowDt.Subtract(prop.srezDt)
                                 {
-                                    // считаем среднее мощности согласно формуле раздела 2.4
-                                    double prof = ((double)BitConverter.ToUInt16(inBuf, znx + profile[pf].offset) * (60 / inBuf[7]) / (2 * prop.Aconst));
-                                    int cnlStat = halfSrez ? halfArch : 2;
+                                    double second = saveTime != 0 ? nowDt.Subtract(dt).TotalSeconds : 0; //nowDt.Subtract(prop.srezDt)
+                                    DateTime writeDt = dt;
 
-                                    srez.KPTags[pf] = KPTags[myTags[profile[pf].signal].Index];
-                                    srez.TagData[pf] = new SrezTableLight.CnlData(prof * profile[pf].range, cnlStat);
-                                    // Запись в текущие промежутки последней записи если время saveTime не равно 0, тогда запись в точку времени среза
-                                    if (saveTime != 0) SetCurData(myTags[profile[pf].signal].Index, prof * profile[pf].range, cnlStat);
+                                    double tme = 0;
+
+                                    do
+                                    {
+                                        // Формируем новый архивный срез по количеству параметров прибора
+                                        TagSrez srez = new TagSrez(profile.Count);
+                                        srez.DateTime = writeDt.AddSeconds(tme);
+
+                                        for (int pf = 0; pf < profile.Count; pf++)
+                                        {
+                                            // считаем среднее мощности согласно формуле раздела 2.4
+                                            double prof = ((double)BitConverter.ToUInt16(inBuf, znx + profile[pf].offset) * (60 / inBuf[7]) / (2 * prop.Aconst));
+                                            int cnlStat = halfSrez ? halfArch : 2;
+
+                                            srez.KPTags[pf] = KPTags[myTags[profile[pf].signal].Index];
+                                            srez.TagData[pf] = new SrezTableLight.CnlData(prof * profile[pf].range, cnlStat);
+                                            // Запись в текущие промежутки последней записи если время saveTime не равно 0, тогда запись в точку времени среза
+                                            if (saveTime != 0) SetCurData(myTags[profile[pf].signal].Index, prof * profile[pf].range, cnlStat);
+                                        }
+
+                                        srez.Descr = "Запись средних мощностей " + nowDt.ToString();
+                                        AddArcSrez(srez); // Записываем архивный срез в БД RapidScada для текущего прибора
+
+                                        tme = tme + saveTime;
+                                    }
+                                    while (tme < second);
+
+                                    firstAProfile = false;
+                                    //Сохранить время последнего считанного архива в список сохраняемых параметров
+                                    prop.srezDt = dt;
+                                    prop.saveParam.arcDt = prop.srezDt.ToString(); // prop.srezDt.ToString()
+                                    SaveSettings();
                                 }
-
-                                srez.Descr = "Запись средних мощностей " + nowDt.ToString();
-                                AddArcSrez(srez); // Записываем архивный срез в БД RapidScada для текущего прибора
-
-                                tme = tme + saveTime;
                             }
-                            while (tme < second);
-
-                            //Сохранить время последнего считанного архива в список сохраняемых параметров
-                            prop.saveParam.arcDt = prop.srezDt.ToString(); // TEST
-                            SaveSettings();
-
-                            // TEST
-                            //WriteToLog("От архивного  "  + prop.saveParam.serial + "  " + prop.saveParam.madeDt + "  " + prop.saveParam.constA + "  " + prop.saveParam.arcDt);
-
+                            else
+                            {
+                                if (inBuf[1] == 0x05) prop.opencnl = false;
+                            }
                         }
-                    }
-                    else
-                    {
-                        if (inBuf[1] == 0x05) prop.opencnl = false;
+                        else
+                        {
+                            if (inBuf[1] == 0x05) prop.opencnl = false;
+                        }
                     }
                 }
             }
-
 
             // У статуса и коэффициентов фиксированные номера сигналов
             // Статус передаем всегда на случай потери связи
@@ -1303,7 +1281,7 @@ namespace Scada.Comm.Devices
                 kpEvent.Descr = ToLogString(code);
                 AddEvent(kpEvent);
                 CommLineSvc.FlushArcData(this);
-                change = false;
+                //change = false;
                 code_err = code;
             }
 
@@ -1474,7 +1452,7 @@ namespace Scada.Comm.Devices
                         }
                     }
                     lastCommSucc = true;
-                    CommSucc = true; // TEST
+                    //CommSucc = true; // TEST
                 }
                 else WriteToLog(CommPhrases.ResponseCrcError);
             }
@@ -1591,8 +1569,6 @@ namespace Scada.Comm.Devices
                 "Error when saving settings in a file: " + err.Message));
             }
         }
-
-
     }
 }
 
